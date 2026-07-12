@@ -129,21 +129,7 @@ const HomePageConfig = ({ config, refreshConfig }: HomePageConfigProps) => {
         </div>
 
         <div className='space-y-3'>
-          <ToggleSwitch
-            checked={homePageSettings.showHeroBanner}
-            onChange={(checked) => setHomePageSettings(prev => ({ ...prev, showHeroBanner: checked }))}
-            label='Hero Banner 轮播'
-          />
-          <ToggleSwitch
-            checked={homePageSettings.showContinueWatching}
-            onChange={(checked) => setHomePageSettings(prev => ({ ...prev, showContinueWatching: checked }))}
-            label='继续观看'
-          />
-          <ToggleSwitch
-            checked={homePageSettings.showUpcomingReleases}
-            onChange={(checked) => setHomePageSettings(prev => ({ ...prev, showUpcomingReleases: checked }))}
-            label='即将上映'
-          />
+
           <ToggleSwitch
             checked={homePageSettings.showHotMovies}
             onChange={(checked) => setHomePageSettings(prev => ({ ...prev, showHotMovies: checked }))}
@@ -163,11 +149,6 @@ const HomePageConfig = ({ config, refreshConfig }: HomePageConfigProps) => {
             checked={homePageSettings.showHotVariety}
             onChange={(checked) => setHomePageSettings(prev => ({ ...prev, showHotVariety: checked }))}
             label='热门综艺'
-          />
-          <ToggleSwitch
-            checked={homePageSettings.showHotShortDramas}
-            onChange={(checked) => setHomePageSettings(prev => ({ ...prev, showHotShortDramas: checked }))}
-            label='热门短剧'
           />
         </div>
 

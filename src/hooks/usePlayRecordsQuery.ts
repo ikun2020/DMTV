@@ -16,6 +16,7 @@
  */
 
 import { useQuery, queryOptions } from '@tanstack/react-query';
+import { getAllPlayRecords } from '@/lib/db.client';
 import type { PlayRecord } from '@/lib/types';
 
 // ============================================================================
@@ -32,16 +33,7 @@ import type { PlayRecord } from '@/lib/types';
  */
 export const playRecordsQueryOptions = queryOptions({
   queryKey: ['playRecords'] as const,
-  queryFn: async (): Promise<Record<string, PlayRecord>> => {
-    const response = await fetch('/api/playrecords');
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch play records: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data as Record<string, PlayRecord>;
-  },
+  queryFn: (): Promise<Record<string, PlayRecord>> => getAllPlayRecords(),
   // 5分钟内数据被认为是新鲜的，不会重新请求
   staleTime: 5 * 60 * 1000,
   // 10分钟后未使用的缓存会被垃圾回收
@@ -111,13 +103,7 @@ export function usePlayRecordsArrayQuery(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['playRecords', 'array'] as const,
     queryFn: async () => {
-      const response = await fetch('/api/playrecords');
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch play records: ${response.status}`);
-      }
-
-      const data = await response.json() as Record<string, PlayRecord>;
+      const data = await getAllPlayRecords();
 
       // 转换为数组并排序
       const recordsArray = Object.entries(data).map(([key, record]) => ({
@@ -159,13 +145,7 @@ export function usePlayRecordQuery(
   return useQuery({
     queryKey: ['playRecords', 'single', source, id] as const,
     queryFn: async () => {
-      const response = await fetch('/api/playrecords');
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch play records: ${response.status}`);
-      }
-
-      const data = await response.json() as Record<string, PlayRecord>;
+      const data = await getAllPlayRecords();
       const key = `${source}+${id}`;
 
       return data[key] || null;

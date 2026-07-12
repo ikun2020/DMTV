@@ -1,2 +1,11 @@
 .env
 .env*.local
+node_modules
+.next
+.git
+.github
+.vscode
+coverage
+*.log
+video-cache
+data

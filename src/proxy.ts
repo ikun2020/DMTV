@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
+import { canAccessAsGuest } from '@/lib/guest-access';
 
 // 信任网络配置缓存（从 API 获取）
 let trustedNetworkCache: { enabled: boolean; trustedIPs: string[]; blockAdminAccess: boolean } | null = null;
@@ -239,6 +240,14 @@ export async function proxy(request: NextRequest) {
     if (newPathname.startsWith('/api')) {
       // 将重写后的请求传递给认证逻辑
       const modifiedRequest = new NextRequest(url, request);
+      if (
+        canAccessAsGuest(newPathname) &&
+        !modifiedRequest.cookies.has('user_auth') &&
+        !modifiedRequest.cookies.has('auth')
+      ) {
+        return response;
+      }
+
       return handleAuthentication(modifiedRequest, newPathname, response);
     }
 
@@ -247,6 +256,14 @@ export async function proxy(request: NextRequest) {
 
   // 跳过不需要认证的路径
   if (shouldSkipAuth(pathname)) {
+    return NextResponse.next();
+  }
+
+  if (
+    canAccessAsGuest(pathname) &&
+    !request.cookies.has('user_auth') &&
+    !request.cookies.has('auth')
+  ) {
     return NextResponse.next();
   }
 
@@ -411,6 +428,7 @@ function shouldSkipAuth(pathname: string): boolean {
     '/manifest.json',
     '/icons/',
     '/logo.png',
+    '/placeholder-cover.jpg',
     '/screenshot.png',
     '/api/telegram/', // Telegram API 端点
     '/api/cache/', // 缓存 API 端点（内部使用，无需认证）

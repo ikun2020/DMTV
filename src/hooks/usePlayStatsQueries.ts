@@ -2,7 +2,6 @@
 
 import { useQuery, useQueryClient, queryOptions } from '@tanstack/react-query';
 import type { PlayStatsResult } from '@/lib/types';
-import { useWatchingUpdatesQuery as useWatchingUpdates } from './useWatchingUpdates';
 import type { ReleaseCalendarItem } from '@/lib/types';
 
 /**
@@ -82,16 +81,6 @@ export function useUserStatsQuery(enabled: boolean) {
 }
 
 /**
- * Fetch watching updates for play-stats page
- * Uses the new TanStack Query implementation
- */
-export function usePlayStatsWatchingUpdatesQuery(enabled: boolean) {
-  return useWatchingUpdates({
-    enabled,
-  });
-}
-
-/**
  * Query options for upcoming releases
  */
 const upcomingReleasesOptions = () => queryOptions<ReleaseCalendarItem[]>({
@@ -143,7 +132,6 @@ export function useInvalidatePlayStats() {
 
     // Invalidate all play-stats related queries
     await queryClient.invalidateQueries({ queryKey: ['playStats'] });
-    await queryClient.invalidateQueries({ queryKey: ['watchingUpdates'] });
     await queryClient.invalidateQueries({ queryKey: ['upcomingReleases'] });
     await queryClient.invalidateQueries({ queryKey: ['playRecords'] });
   };

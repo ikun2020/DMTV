@@ -7,14 +7,11 @@ import { ChevronUp } from 'lucide-react';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { PlayRecord, ReleaseCalendarItem } from '@/lib/types';
-import type { WatchingUpdate } from '@/hooks/useWatchingUpdates';
 
 import PageLayout from '@/components/PageLayout';
-import VideoCard from '@/components/VideoCard';
 import {
   useAdminStatsQuery,
   useUserStatsQuery,
-  usePlayStatsWatchingUpdatesQuery,
   useUpcomingReleasesQuery,
   useInvalidatePlayStats,
 } from '@/hooks/usePlayStatsQueries';
@@ -74,7 +71,6 @@ const PlayStatsPage: React.FC = () => {
   const [authInfo, setAuthInfo] = useState<{ username?: string; role?: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const [showWatchingUpdates, setShowWatchingUpdates] = useState(false);
   const [activeTab, setActiveTab] = useState<'admin' | 'personal'>('admin'); // 新增Tab状态
 
   // 🚀 TanStack Query - 管理员统计数据
@@ -90,11 +86,6 @@ const PlayStatsPage: React.FC = () => {
     error: userError,
     isLoading: userLoading,
   } = useUserStatsQuery(!!authInfo);
-
-  // 🚀 TanStack Query - 追番更新
-  const {
-    data: watchingUpdates = null,
-  } = usePlayStatsWatchingUpdatesQuery(!!authInfo);
 
   // 🚀 TanStack Query - 即将上映
   const {
@@ -189,23 +180,9 @@ const PlayStatsPage: React.FC = () => {
 
     // 清理其他可能过期的缓存项
     const keysToCheck = [
-      'moontv_watching_updates',
-      'moontv_last_update_check',
       'release_calendar_all_data',
       'release_calendar_all_data_time'
     ];
-
-    // 检查追番更新缓存（这个有不同的过期时间）
-    const watchingUpdateTime = localStorage.getItem('moontv_last_update_check');
-    if (watchingUpdateTime) {
-      const WATCHING_CACHE_DURATION = 30 * 60 * 1000; // 30分钟
-      const age = now - parseInt(watchingUpdateTime);
-      if (age >= WATCHING_CACHE_DURATION) {
-        localStorage.removeItem('moontv_watching_updates');
-        localStorage.removeItem('moontv_last_update_check');
-        console.log('已清理过期的追番更新缓存');
-      }
-    }
 
     // 检查发布日历缓存
     keysToCheck.forEach(key => {
@@ -294,7 +271,7 @@ const PlayStatsPage: React.FC = () => {
 
     let updateTimeout: ReturnType<typeof setTimeout> | null = null;
     const handlePlayRecordsUpdate = () => {
-      console.log('播放记录更新，重新检查 watchingUpdates');
+      console.log('播放记录更新，刷新播放统计');
 
       // 🔧 防抖：避免无限循环，1秒内只执行一次
       if (updateTimeout) {
@@ -318,56 +295,6 @@ const PlayStatsPage: React.FC = () => {
       }
     };
   }, [authInfo, invalidatePlayStats]);
-
-  // 处理追番更新卡片点击
-  const handleWatchingUpdatesClick = () => {
-    console.log('点击追番卡片，watchingUpdates:', watchingUpdates);
-    console.log('updatedCount:', watchingUpdates?.updatedCount);
-    console.log('continueWatchingCount:', watchingUpdates?.continueWatchingCount);
-
-    if (watchingUpdates && ((watchingUpdates.updatedCount || 0) > 0 || (watchingUpdates.continueWatchingCount || 0) > 0)) {
-      console.log('条件满足，显示弹窗');
-      setShowWatchingUpdates(true);
-      console.log('setShowWatchingUpdates(true) 已调用');
-
-      // 强制刷新状态
-      setTimeout(() => {
-        setShowWatchingUpdates(prev => {
-          console.log('强制状态更新，当前值:', prev);
-          return true;
-        });
-      }, 100);
-    } else {
-      console.log('条件不满足，不显示弹窗');
-    }
-  };
-
-  // 测试函数：强制显示弹窗
-  const forceShowPopup = () => {
-    console.log('强制显示弹窗');
-    setShowWatchingUpdates(true);
-  };
-
-  // 关闭追番更新详情
-  const handleCloseWatchingUpdates = () => {
-    setShowWatchingUpdates(false);
-  };
-
-  // 格式化更新时间
-  const formatLastUpdate = (timestamp: number): string => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / (1000 * 60));
-
-    if (minutes < 1) return '刚刚更新';
-    if (minutes < 60) return `${minutes}分钟前`;
-
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}小时前`;
-
-    const days = Math.floor(hours / 24);
-    return `${days}天前`;
-  };
 
   // 监听滚动位置，显示/隐藏回到顶部按钮
   useEffect(() => {
@@ -1153,63 +1080,7 @@ const PlayStatsPage: React.FC = () => {
                     常用来源
                   </div>
                 </div>
-                {/* 新集数更新 */}
-                <div
-                  className={`p-4 rounded-lg border transition-all ${
-                    (watchingUpdates?.updatedCount || 0) > 0
-                      ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                      : 'bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-800'
-                  }`}
-                >
-                  <div className={`text-2xl font-bold ${
-                    (watchingUpdates?.updatedCount || 0) > 0
-                      ? 'text-red-800 dark:text-red-300'
-                      : 'text-gray-800 dark:text-gray-300'
-                  }`}>
-                    {watchingUpdates?.updatedCount || 0}
-                  </div>
-                  <div className={`text-sm ${
-                    (watchingUpdates?.updatedCount || 0) > 0
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-gray-600 dark:text-gray-400'
-                  }`}>
-                    新集数更新
-                  </div>
-                  {(watchingUpdates?.updatedCount || 0) > 0 && (
-                    <div className='text-xs text-red-500 dark:text-red-400 mt-1'>
-                      有新集数发布！
-                    </div>
-                  )}
-                </div>
 
-                {/* 继续观看提醒 */}
-                <div
-                  className={`p-4 rounded-lg border transition-all ${
-                    (watchingUpdates?.continueWatchingCount || 0) > 0
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                      : 'bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-800'
-                  }`}
-                >
-                  <div className={`text-2xl font-bold ${
-                    (watchingUpdates?.continueWatchingCount || 0) > 0
-                      ? 'text-blue-800 dark:text-blue-300'
-                      : 'text-gray-800 dark:text-gray-300'
-                  }`}>
-                    {watchingUpdates?.continueWatchingCount || 0}
-                  </div>
-                  <div className={`text-sm ${
-                    (watchingUpdates?.continueWatchingCount || 0) > 0
-                      ? 'text-blue-600 dark:text-blue-400'
-                      : 'text-gray-600 dark:text-gray-400'
-                  }`}>
-                    继续观看
-                  </div>
-                  {(watchingUpdates?.continueWatchingCount || 0) > 0 && (
-                    <div className='text-xs text-blue-500 dark:text-blue-400 mt-1'>
-                      有剧集待续看！
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* 即将上映卡片 */}
@@ -1317,171 +1188,6 @@ const PlayStatsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* 有新集数的剧集 */}
-              {watchingUpdates && watchingUpdates.updatedSeries.filter(series => series.hasNewEpisode).length > 0 && (
-                <div className="mb-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                      有新集数
-                    </h2>
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                      <span className="text-sm text-red-500 font-medium">
-                        {watchingUpdates.updatedSeries.filter(series => series.hasNewEpisode).length}部剧集有更新
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 移动端网格布局 */}
-                  <div className="sm:hidden">
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-8 pt-4 pb-6">
-                      {watchingUpdates.updatedSeries
-                        .filter(series => series.hasNewEpisode)
-                        .map((series, index) => (
-                          <div key={`new-${series.title}_${series.year}_${index}`} className="relative w-full group/card">
-                            <div className="relative group-hover/card:z-5 transition-all duration-300 ease-in-out">
-                              <VideoCard
-                                title={series.title}
-                                poster={series.cover || ''}
-                                year={series.year}
-                                from="playrecord"
-                                progress={0}
-                                currentEpisode={series.currentEpisode}
-                                episodes={series.totalEpisodes}
-                                source={series.sourceKey}
-                                id={series.videoId}
-                                onDelete={undefined}
-                                remarks={series.remarks}
-                              />
-                              {/* 新集数提示光环效果 */}
-                              <div className="absolute inset-0 rounded-lg ring-2 ring-red-400/50 animate-pulse pointer-events-none z-9 transition-transform duration-300 ease-in-out group-hover/card:scale-[1.05]"></div>
-                            </div>
-                            {/* 新集数徽章 - Netflix 统一风格 */}
-                            <div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-md shadow-lg animate-pulse z-10 font-bold">
-                              +{series.newEpisodes}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-
-                  {/* 桌面端网格布局 */}
-                  <div className="hidden sm:block">
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-6 gap-y-10 pt-6 pb-8">
-                      {watchingUpdates.updatedSeries
-                        .filter(series => series.hasNewEpisode)
-                        .map((series, index) => (
-                          <div key={`new-${series.title}_${series.year}_${index}`} className="relative w-full group/card">
-                            <div className="relative group-hover/card:z-5 transition-all duration-300 ease-in-out">
-                              <VideoCard
-                                title={series.title}
-                                poster={series.cover || ''}
-                                year={series.year}
-                                from="playrecord"
-                                progress={0}
-                                currentEpisode={series.currentEpisode}
-                                episodes={series.totalEpisodes}
-                                source={series.sourceKey}
-                                id={series.videoId}
-                                onDelete={undefined}
-                                remarks={series.remarks}
-                              />
-                              {/* 新集数提示光环效果 */}
-                              <div className="absolute inset-0 rounded-lg ring-2 ring-red-400/50 animate-pulse pointer-events-none z-9 transition-transform duration-300 ease-in-out group-hover/card:scale-[1.05]"></div>
-                            </div>
-                            {/* 新集数徽章 - Netflix 统一风格 */}
-                            <div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-md shadow-lg animate-pulse z-10 font-bold">
-                              +{series.newEpisodes}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 继续观看的剧集 */}
-              {watchingUpdates && watchingUpdates.updatedSeries.filter(series => series.hasContinueWatching && !series.hasNewEpisode).length > 0 && (
-                <div className="mb-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                      继续观看
-                    </h2>
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                      <span className="text-sm text-blue-500 font-medium">
-                        {watchingUpdates.updatedSeries.filter(series => series.hasContinueWatching && !series.hasNewEpisode).length}部剧集待续看
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 移动端网格布局 */}
-                  <div className="sm:hidden">
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-8 pt-4 pb-6">
-                      {watchingUpdates.updatedSeries
-                        .filter(series => series.hasContinueWatching && !series.hasNewEpisode)
-                        .map((series, index) => (
-                          <div key={`continue-${series.title}_${series.year}_${index}`} className="relative w-full group/card">
-                            <div className="relative group-hover/card:z-5 transition-all duration-300 ease-in-out">
-                              <VideoCard
-                                title={series.title}
-                                poster={series.cover || ''}
-                                year={series.year}
-                                from="playrecord"
-                                progress={0}
-                                currentEpisode={series.currentEpisode}
-                                episodes={series.totalEpisodes}
-                                source={series.sourceKey}
-                                id={series.videoId}
-                                onDelete={undefined}
-                                remarks={series.remarks}
-                              />
-                              {/* 继续观看提示光环效果 */}
-                              <div className="absolute inset-0 rounded-lg ring-2 ring-blue-400/50 animate-pulse pointer-events-none z-9 transition-transform duration-300 ease-in-out group-hover/card:scale-[1.05]"></div>
-                            </div>
-                            {/* 继续观看徽章 - Netflix 统一风格 */}
-                            <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-md shadow-lg animate-pulse z-10 font-bold">
-                              继续看
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-
-                  {/* 桌面端网格布局 */}
-                  <div className="hidden sm:block">
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-6 gap-y-10 pt-6 pb-8">
-                      {watchingUpdates.updatedSeries
-                        .filter(series => series.hasContinueWatching && !series.hasNewEpisode)
-                        .map((series, index) => (
-                          <div key={`continue-${series.title}_${series.year}_${index}`} className="relative w-full group/card">
-                            <div className="relative group-hover/card:z-5 transition-all duration-300 ease-in-out">
-                              <VideoCard
-                                title={series.title}
-                                poster={series.cover || ''}
-                                year={series.year}
-                                from="playrecord"
-                                progress={0}
-                                currentEpisode={series.currentEpisode}
-                                episodes={series.totalEpisodes}
-                                source={series.sourceKey}
-                                id={series.videoId}
-                                onDelete={undefined}
-                                remarks={series.remarks}
-                              />
-                              {/* 继续观看提示光环效果 */}
-                              <div className="absolute inset-0 rounded-lg ring-2 ring-blue-400/50 animate-pulse pointer-events-none z-9 transition-transform duration-300 ease-in-out group-hover/card:scale-[1.05]"></div>
-                            </div>
-                            {/* 继续观看徽章 - Netflix 统一风格 */}
-                            <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-md shadow-lg animate-pulse z-10 font-bold">
-                              继续看
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* 最近播放记录 */}
               <div>
@@ -1753,63 +1459,7 @@ const PlayStatsPage: React.FC = () => {
                 常用来源
               </div>
             </div>
-            {/* 新集数更新 */}
-            <div
-              className={`p-4 rounded-lg border transition-all ${
-                (watchingUpdates?.updatedCount || 0) > 0
-                  ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                  : 'bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-800'
-              }`}
-            >
-              <div className={`text-2xl font-bold ${
-                (watchingUpdates?.updatedCount || 0) > 0
-                  ? 'text-red-800 dark:text-red-300'
-                  : 'text-gray-800 dark:text-gray-300'
-              }`}>
-                {watchingUpdates?.updatedCount || 0}
-              </div>
-              <div className={`text-sm ${
-                (watchingUpdates?.updatedCount || 0) > 0
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-600 dark:text-gray-400'
-              }`}>
-                新集数更新
-              </div>
-              {(watchingUpdates?.updatedCount || 0) > 0 && (
-                <div className='text-xs text-red-500 dark:text-red-400 mt-1'>
-                  有新集数发布！
-                </div>
-              )}
-            </div>
 
-            {/* 继续观看提醒 */}
-            <div
-              className={`p-4 rounded-lg border transition-all ${
-                (watchingUpdates?.continueWatchingCount || 0) > 0
-                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                  : 'bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-800'
-              }`}
-            >
-              <div className={`text-2xl font-bold ${
-                (watchingUpdates?.continueWatchingCount || 0) > 0
-                  ? 'text-blue-800 dark:text-blue-300'
-                  : 'text-gray-800 dark:text-gray-300'
-              }`}>
-                {watchingUpdates?.continueWatchingCount || 0}
-              </div>
-              <div className={`text-sm ${
-                (watchingUpdates?.continueWatchingCount || 0) > 0
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-gray-600 dark:text-gray-400'
-              }`}>
-                继续观看
-              </div>
-              {(watchingUpdates?.continueWatchingCount || 0) > 0 && (
-                <div className='text-xs text-blue-500 dark:text-blue-400 mt-1'>
-                  有剧集待续看！
-                </div>
-              )}
-            </div>
           </div>
 
           {/* 即将上映卡片 */}
@@ -1916,176 +1566,11 @@ const PlayStatsPage: React.FC = () => {
             </div>
           )}
 
-          {/* 有新集数的剧集 */}
-          {watchingUpdates && watchingUpdates.updatedSeries.filter(series => series.hasNewEpisode).length > 0 && (
-            <div className="mb-8">
-              <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  有新集数
-                </h2>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-red-500 font-medium">
-                    {watchingUpdates.updatedSeries.filter(series => series.hasNewEpisode).length}部剧集有更新
-                  </span>
-                </div>
-              </div>
-
-              {/* 移动端网格布局 */}
-              <div className="sm:hidden">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-8 pt-4 pb-6">
-                  {watchingUpdates.updatedSeries
-                    .filter(series => series.hasNewEpisode)
-                    .map((series, index) => (
-                      <div key={`new-${series.title}_${series.year}_${index}`} className="relative w-full group/card">
-                        <div className="relative group-hover/card:z-5 transition-all duration-300 ease-in-out">
-                          <VideoCard
-                            title={series.title}
-                            poster={series.cover || ''}
-                            year={series.year}
-                            from="playrecord"
-                            progress={0}
-                            currentEpisode={series.currentEpisode}
-                            episodes={series.totalEpisodes}
-                            source={series.sourceKey}
-                            id={series.videoId}
-                            onDelete={undefined}
-                            remarks={series.remarks}
-                          />
-                          {/* 新集数提示光环效果 */}
-                          <div className="absolute inset-0 rounded-lg ring-2 ring-red-400/50 animate-pulse pointer-events-none z-9 transition-transform duration-300 ease-in-out group-hover/card:scale-[1.05]"></div>
-                        </div>
-                        {/* 新集数徽章 - Netflix 统一风格 */}
-                        <div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-md shadow-lg animate-pulse z-10 font-bold">
-                          +{series.newEpisodes}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-
-              {/* 桌面端网格布局 */}
-              <div className="hidden sm:block">
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-6 gap-y-10 pt-6 pb-8">
-                  {watchingUpdates.updatedSeries
-                    .filter(series => series.hasNewEpisode)
-                    .map((series, index) => (
-                      <div key={`new-${series.title}_${series.year}_${index}`} className="relative w-full group/card">
-                        <div className="relative group-hover/card:z-5 transition-all duration-300 ease-in-out">
-                          <VideoCard
-                            title={series.title}
-                            poster={series.cover || ''}
-                            year={series.year}
-                            from="playrecord"
-                            progress={0}
-                            currentEpisode={series.currentEpisode}
-                            episodes={series.totalEpisodes}
-                            source={series.sourceKey}
-                            id={series.videoId}
-                            onDelete={undefined}
-                            remarks={series.remarks}
-                          />
-                          {/* 新集数提示光环效果 */}
-                          <div className="absolute inset-0 rounded-lg ring-2 ring-red-400/50 animate-pulse pointer-events-none z-9 transition-transform duration-300 ease-in-out group-hover/card:scale-[1.05]"></div>
-                        </div>
-                        {/* 新集数徽章 - Netflix 统一风格 */}
-                        <div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-md shadow-lg animate-pulse z-10 font-bold">
-                          +{series.newEpisodes}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 继续观看的剧集 */}
-          {watchingUpdates && watchingUpdates.updatedSeries.filter(series => series.hasContinueWatching && !series.hasNewEpisode).length > 0 && (
-            <div className="mb-8">
-              <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  继续观看
-                </h2>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-blue-500 font-medium">
-                    {watchingUpdates.updatedSeries.filter(series => series.hasContinueWatching && !series.hasNewEpisode).length}部剧集待续看
-                  </span>
-                </div>
-              </div>
-
-              {/* 移动端网格布局 */}
-              <div className="sm:hidden">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-8 pt-4 pb-6">
-                  {watchingUpdates.updatedSeries
-                    .filter(series => series.hasContinueWatching && !series.hasNewEpisode)
-                    .map((series, index) => (
-                      <div key={`continue-${series.title}_${series.year}_${index}`} className="relative w-full group/card">
-                        <div className="relative group-hover/card:z-5 transition-all duration-300 ease-in-out">
-                          <VideoCard
-                            title={series.title}
-                            poster={series.cover || ''}
-                            year={series.year}
-                            from="playrecord"
-                            progress={0}
-                            currentEpisode={series.currentEpisode}
-                            episodes={series.totalEpisodes}
-                            source={series.sourceKey}
-                            id={series.videoId}
-                            onDelete={undefined}
-                            remarks={series.remarks}
-                          />
-                          {/* 继续观看提示光环效果 */}
-                          <div className="absolute inset-0 rounded-lg ring-2 ring-blue-400/50 animate-pulse pointer-events-none z-9 transition-transform duration-300 ease-in-out group-hover/card:scale-[1.05]"></div>
-                        </div>
-                        {/* 继续观看徽章 - Netflix 统一风格 */}
-                        <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-md shadow-lg animate-pulse z-10 font-bold">
-                          继续看
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-
-              {/* 桌面端网格布局 */}
-              <div className="hidden sm:block">
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-6 gap-y-10 pt-6 pb-8">
-                  {watchingUpdates.updatedSeries
-                    .filter(series => series.hasContinueWatching && !series.hasNewEpisode)
-                    .map((series, index) => (
-                      <div key={`continue-${series.title}_${series.year}_${index}`} className="relative w-full group/card">
-                        <div className="relative group-hover/card:z-5 transition-all duration-300 ease-in-out">
-                          <VideoCard
-                            title={series.title}
-                            poster={series.cover || ''}
-                            year={series.year}
-                            from="playrecord"
-                            progress={0}
-                            currentEpisode={series.currentEpisode}
-                            episodes={series.totalEpisodes}
-                            source={series.sourceKey}
-                            id={series.videoId}
-                            onDelete={undefined}
-                            remarks={series.remarks}
-                          />
-                          {/* 继续观看提示光环效果 */}
-                          <div className="absolute inset-0 rounded-lg ring-2 ring-blue-400/50 animate-pulse pointer-events-none z-9 transition-transform duration-300 ease-in-out group-hover/card:scale-[1.05]"></div>
-                        </div>
-                        {/* 继续观看徽章 - Netflix 统一风格 */}
-                        <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-md shadow-lg animate-pulse z-10 font-bold">
-                          继续看
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 历史观看记录 */}
           <div>
             <h3 className='text-xl font-semibold text-gray-900 dark:text-white mb-6'>
-              {watchingUpdates && (watchingUpdates.updatedCount > 0 || watchingUpdates.continueWatchingCount > 0) ? '历史观看' : '观看记录'}
+              观看记录
             </h3>
             {userStats.recentRecords && userStats.recentRecords.length > 0 ? (
               <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>

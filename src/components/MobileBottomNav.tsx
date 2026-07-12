@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Box, Cat, Clover, Film, Globe, Home, PlaySquare, Radio, Star, Tv } from 'lucide-react';
+import { Box, Cat, Clover, Film, Globe, Home, Radio, Star, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -78,14 +78,6 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
       hoverBg: 'hover:bg-purple-500/20',
     },
     {
-      icon: PlaySquare,
-      label: '短剧',
-      href: '/shortdrama',
-      activeGradient: 'bg-gradient-to-r from-orange-500 to-red-500',
-      activeTextColor: 'text-white',
-      hoverBg: 'hover:bg-orange-500/20',
-    },
-    {
       icon: Cat,
       label: '动漫',
       href: '/douban?type=anime',
@@ -148,10 +140,6 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
 
       // 源浏览特殊处理
       if (href === '/source-browser' && decodedActive.startsWith('/source-browser'))
-        return true;
-
-      // 短剧特殊处理
-      if (href === '/shortdrama' && decodedActive.startsWith('/shortdrama'))
         return true;
 
       // 直播页特殊处理
