@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
 
+import { canAccessAsGuest, GUEST_USERNAME } from './guest-access';
+
 // 从cookie获取认证信息 (服务端使用)
 export function getAuthInfoFromCookie(request: NextRequest): {
   password?: string;
@@ -9,11 +11,21 @@ export function getAuthInfoFromCookie(request: NextRequest): {
   loginTime?: number;
   trustedNetwork?: boolean;
   role?: 'owner' | 'admin' | 'user';
+  guest?: boolean;
 } | null {
   // 尝试新的 cookie 名称 user_auth，如果没有则尝试旧的 auth
   const authCookie = request.cookies.get('user_auth') || request.cookies.get('auth');
 
   if (!authCookie) {
+    if (canAccessAsGuest(request.nextUrl.pathname)) {
+      return {
+        username: GUEST_USERNAME,
+        role: 'user',
+        guest: true,
+        loginTime: Date.now(),
+      };
+    }
+
     return null;
   }
 
@@ -35,6 +47,7 @@ export function getAuthInfoFromBrowserCookie(): {
   loginTime?: number;
   trustedNetwork?: boolean;
   role?: 'owner' | 'admin' | 'user';
+  guest?: boolean;
 } | null {
   if (typeof window === 'undefined') {
     return null;

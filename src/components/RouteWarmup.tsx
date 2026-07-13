@@ -16,7 +16,6 @@ const DEFAULT_WARMUP_ROUTES = [
   '/',
   '/douban?type=movie',
   '/douban?type=tv',
-  '/shortdrama',
   '/live',
   '/source-browser',
 ];

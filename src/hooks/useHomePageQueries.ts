@@ -22,8 +22,7 @@ import {
   GetBangumiCalendarData,
 } from '@/lib/bangumi.client';
 import { getDoubanCategories } from '@/lib/douban.client';
-import { getRecommendedShortDramas } from '@/lib/shortdrama.client';
-import { DoubanItem, ShortDramaItem } from '@/lib/types';
+import { DoubanItem } from '@/lib/types';
 
 // ============================================================================
 // 类型定义
@@ -34,7 +33,6 @@ export interface HomePageConfig {
   showHotTvShows?: boolean;
   showHotVariety?: boolean;
   showNewAnime?: boolean;
-  showHotShortDramas?: boolean;
 }
 
 export interface HomePageData {
@@ -42,7 +40,6 @@ export interface HomePageData {
   hotTvShows: DoubanItem[];
   hotVarietyShows: DoubanItem[];
   hotAnime: DoubanItem[];
-  hotShortDramas: ShortDramaItem[];
   bangumiCalendar: BangumiCalendarData[];
 }
 
@@ -101,7 +98,6 @@ export function useHomePageQueries(config?: HomePageConfig): HomePageQueriesResu
     showHotTvShows: config?.showHotTvShows ?? true,
     showHotVariety: config?.showHotVariety ?? true,
     showNewAnime: config?.showNewAnime ?? true,
-    showHotShortDramas: config?.showHotShortDramas ?? true,
   }), [config]);
 
   // 使用 useCallback 缓存 combine 函数，避免每次渲染都重新创建
@@ -111,7 +107,6 @@ export function useHomePageQueries(config?: HomePageConfig): HomePageQueriesResu
       tvResult,
       varietyResult,
       animeResult,
-      shortDramasResult,
       bangumiResult,
     ] = results;
 
@@ -123,7 +118,6 @@ export function useHomePageQueries(config?: HomePageConfig): HomePageQueriesResu
       hotVarietyShows:
         varietyResult.data?.code === 200 ? varietyResult.data.list : [],
       hotAnime: animeResult.data?.code === 200 ? animeResult.data.list : [],
-      hotShortDramas: shortDramasResult.data || [],
       bangumiCalendar: bangumiResult.data || [],
     };
 
@@ -204,14 +198,6 @@ export function useHomePageQueries(config?: HomePageConfig): HomePageQueriesResu
         enabled: enabledConfig.showNewAnime, // 🔥 根据配置决定是否执行查询
       },
       // 5. 短剧推荐
-      {
-        queryKey: ['shortdramas', 'recommended', 8],
-        queryFn: () => getRecommendedShortDramas(undefined, 8),
-        staleTime: 5 * 60 * 1000, // 5分钟 - 短剧推荐更新较慢
-        gcTime: 15 * 60 * 1000, // 15分钟
-        retry: 2,
-        enabled: enabledConfig.showHotShortDramas, // 🔥 根据配置决定是否执行查询
-      },
       // 6. 番剧日历 - 总是启用，因为新番放送模块需要它
       {
         queryKey: ['bangumi', 'calendar'],

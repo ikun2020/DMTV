@@ -8,10 +8,7 @@ import type { PlayRecord } from '@/lib/db.client';
 // 🚀 TanStack Query Mutations
 import { useClearPlayRecordsMutation } from '@/hooks/usePlayRecordsMutations';
 // 🚀 TanStack Query Queries
-import {
-  useContinueWatchingQuery,
-  useWatchingUpdatesQuery,
-} from '@/hooks/useContinueWatchingQueries';
+import { useContinueWatchingQuery } from '@/hooks/useContinueWatchingQueries';
 
 import ScrollableRow from '@/components/ScrollableRow';
 import SectionTitle from '@/components/SectionTitle';
@@ -31,11 +28,6 @@ function ContinueWatching({ className }: ContinueWatchingProps) {
   const { data: playRecords = [], isLoading: loading } = useContinueWatchingQuery();
 
   // 🚀 TanStack Query - 观看更新（仅当有播放记录时才查询）
-  const { data: watchingUpdates = null } = useWatchingUpdatesQuery({
-    enabled: !loading && playRecords.length > 0
-  });
-
-  // 🚀 TanStack Query - 使用 useMutation 管理清空播放记录操作
   const clearPlayRecordsMutation = useClearPlayRecordsMutation();
 
   // 读取清空确认设置
@@ -65,41 +57,7 @@ function ContinueWatching({ className }: ContinueWatchingProps) {
     return { source, id };
   };
 
-  // 检查播放记录是否有新集数更新
-  const getNewEpisodesCount = (record: PlayRecord & { key: string }): number => {
-    if (!watchingUpdates || !watchingUpdates.updatedSeries) return 0;
-
-    const { source, id } = parseKey(record.key);
-
-    // 在watchingUpdates中查找匹配的剧集
-    const matchedSeries = watchingUpdates.updatedSeries.find(series =>
-      series.sourceKey === source &&
-      series.videoId === id &&
-      series.hasNewEpisode
-    );
-
-    return matchedSeries ? (matchedSeries.newEpisodes || 0) : 0;
-  };
-
-  // 获取最新的总集数（用于显示，不修改原始数据）
-  const getLatestTotalEpisodes = (record: PlayRecord & { key: string }): number => {
-    if (!watchingUpdates || !watchingUpdates.updatedSeries) return record.total_episodes;
-
-    const { source, id } = parseKey(record.key);
-
-    // 在watchingUpdates中查找匹配的剧集
-    const matchedSeries = watchingUpdates.updatedSeries.find(series =>
-      series.sourceKey === source &&
-      series.videoId === id
-    );
-
-    // 如果找到匹配的剧集且有最新集数信息，返回最新集数（使用 latestEpisodes，包含了 protectedTotalEpisodes）
-    return matchedSeries && matchedSeries.latestEpisodes
-      ? matchedSeries.latestEpisodes
-      : record.total_episodes;
-  };
-
-  // 处理清空所有记录
+  // 清空全部播放记录
   const handleClearAll = () => {
     // 🚀 使用 mutation.mutate() 清空播放记录
     // 特性：立即清空 UI（乐观更新），失败时自动回滚
@@ -158,10 +116,8 @@ function ContinueWatching({ className }: ContinueWatchingProps) {
           : // 显示真实数据
             playRecords.map((record, index) => {
               const { source, id } = parseKey(record.key);
-              const newEpisodesCount = getNewEpisodesCount(record);
-              const latestTotalEpisodes = getLatestTotalEpisodes(record);
               // 优先使用播放记录中保存的 type，否则根据集数判断
-              const cardType = record.type || (latestTotalEpisodes > 1 ? 'tv' : '');
+              const cardType = record.type || (record.total_episodes > 1 ? 'tv' : '');
               return (
                 <div
                   key={record.key}
@@ -176,7 +132,7 @@ function ContinueWatching({ className }: ContinueWatchingProps) {
                       source={source}
                       source_name={record.source_name}
                       progress={getProgress(record)}
-                      episodes={latestTotalEpisodes}
+                      episodes={record.total_episodes}
                       currentEpisode={record.index}
                       query={record.search_title}
                       from='playrecord'
@@ -187,11 +143,6 @@ function ContinueWatching({ className }: ContinueWatchingProps) {
                     />
                   </div>
                   {/* 新集数徽章 - Netflix 统一风格 */}
-                  {newEpisodesCount > 0 && (
-                    <div className='absolute -top-2 -right-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-md shadow-lg animate-pulse z-10 font-bold'>
-                      +{newEpisodesCount}
-                    </div>
-                  )}
                 </div>
               );
             })}

@@ -2,7 +2,7 @@
 
 'use client';
 
-import { ChevronRight, Film, Tv, Calendar, Sparkles, Play, Trash2 } from 'lucide-react';
+import { Calendar, ChevronRight, Film, Tv, Sparkles, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense, useEffect, useState, useRef, useMemo, useReducer, useTransition } from 'react';
 import { useQuery, queryOptions } from '@tanstack/react-query';
@@ -10,28 +10,19 @@ import { useQuery, queryOptions } from '@tanstack/react-query';
 import {
   BangumiCalendarData,
 } from '@/lib/bangumi.client';
-import { cleanExpiredCache, clearRecommendsCache } from '@/lib/shortdrama-cache';
-import { ShortDramaItem, ReleaseCalendarItem } from '@/lib/types';
 import { useClearFavoritesMutation } from '@/hooks/useFavoritesMutations';
-import { useClearRemindersMutation } from '@/hooks/useRemindersMutations';
 import { useHomePageQueries } from '@/hooks/useHomePageQueries';
-import { useTMDBLogos } from '@/hooks/useTMDBLogo';
-import { getDoubanDetails } from '@/lib/douban.client';
 import { DoubanItem } from '@/lib/types';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { CinematicLoadingFallback } from '@/components/CinematicLoadingFallback';
 import { useFavoritesQuery } from '@/hooks/useFavoritesQuery';
 import { usePlayRecordsQuery } from '@/hooks/usePlayRecordsQuery';
-import { useRemindersQuery } from '@/hooks/useRemindersQuery';
-import { useWatchingUpdatesQuery } from '@/hooks/useWatchingUpdates';
 
 import CapsuleSwitch from '@/components/CapsuleSwitch';
 import ContinueWatching from '@/components/ContinueWatching';
-import HeroBanner from '@/components/HeroBanner';
 import PageLayout from '@/components/PageLayout';
 import ScrollableRow from '@/components/ScrollableRow';
 import SectionTitle from '@/components/SectionTitle';
-import ShortDramaCard from '@/components/ShortDramaCard';
 import SkeletonCard from '@/components/SkeletonCard';
 import { useSite } from '@/components/SiteProvider';
 import { TelegramWelcomeModal } from '@/components/TelegramWelcomeModal';
@@ -40,16 +31,13 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 // 🎯 优化：合并状态管理 - 使用 useReducer 减少重渲染
 interface HomeState {
-  activeTab: 'home' | 'favorites' | 'reminders';
+  activeTab: 'home' | 'favorites' | 'continue';
   hotMovies: DoubanItem[];
   hotTvShows: DoubanItem[];
   hotVarietyShows: DoubanItem[];
   hotAnime: DoubanItem[];
-  hotShortDramas: ShortDramaItem[];
   bangumiCalendarData: BangumiCalendarData[];
-  upcomingReleases: ReleaseCalendarItem[];
   loading: boolean;
-  username: string;
   showAnnouncement: boolean;
   homePageConfig: {
     showHeroBanner: boolean;
@@ -64,23 +52,19 @@ interface HomeState {
 }
 
 type HomeAction =
-  | { type: 'SET_ACTIVE_TAB'; payload: 'home' | 'favorites' | 'reminders' }
+  | { type: 'SET_ACTIVE_TAB'; payload: 'home' | 'favorites' | 'continue' }
   | { type: 'SET_HOT_MOVIES'; payload: DoubanItem[] }
   | { type: 'SET_HOT_TV_SHOWS'; payload: DoubanItem[] }
   | { type: 'SET_HOT_VARIETY_SHOWS'; payload: DoubanItem[] }
   | { type: 'SET_HOT_ANIME'; payload: DoubanItem[] }
-  | { type: 'SET_HOT_SHORT_DRAMAS'; payload: ShortDramaItem[] }
   | { type: 'SET_BANGUMI_CALENDAR_DATA'; payload: BangumiCalendarData[] }
-  | { type: 'SET_UPCOMING_RELEASES'; payload: ReleaseCalendarItem[] }
   | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_USERNAME'; payload: string }
   | { type: 'SET_SHOW_ANNOUNCEMENT'; payload: boolean }
   | { type: 'SET_HOME_PAGE_CONFIG'; payload: HomeState['homePageConfig'] }
   | { type: 'UPDATE_HOT_MOVIES'; payload: (prev: DoubanItem[]) => DoubanItem[] }
   | { type: 'UPDATE_HOT_TV_SHOWS'; payload: (prev: DoubanItem[]) => DoubanItem[] }
   | { type: 'UPDATE_HOT_VARIETY_SHOWS'; payload: (prev: DoubanItem[]) => DoubanItem[] }
-  | { type: 'UPDATE_HOT_ANIME'; payload: (prev: DoubanItem[]) => DoubanItem[] }
-  | { type: 'UPDATE_HOT_SHORT_DRAMAS'; payload: (prev: ShortDramaItem[]) => ShortDramaItem[] };
+  | { type: 'UPDATE_HOT_ANIME'; payload: (prev: DoubanItem[]) => DoubanItem[] };
 
 const homeReducer = (state: HomeState, action: HomeAction): HomeState => {
   switch (action.type) {
@@ -94,16 +78,10 @@ const homeReducer = (state: HomeState, action: HomeAction): HomeState => {
       return { ...state, hotVarietyShows: action.payload };
     case 'SET_HOT_ANIME':
       return { ...state, hotAnime: action.payload };
-    case 'SET_HOT_SHORT_DRAMAS':
-      return { ...state, hotShortDramas: action.payload };
     case 'SET_BANGUMI_CALENDAR_DATA':
       return { ...state, bangumiCalendarData: action.payload };
-    case 'SET_UPCOMING_RELEASES':
-      return { ...state, upcomingReleases: action.payload };
     case 'SET_LOADING':
       return { ...state, loading: action.payload };
-    case 'SET_USERNAME':
-      return { ...state, username: action.payload };
     case 'SET_SHOW_ANNOUNCEMENT':
       return { ...state, showAnnouncement: action.payload };
     case 'SET_HOME_PAGE_CONFIG':
@@ -116,8 +94,6 @@ const homeReducer = (state: HomeState, action: HomeAction): HomeState => {
       return { ...state, hotVarietyShows: action.payload(state.hotVarietyShows) };
     case 'UPDATE_HOT_ANIME':
       return { ...state, hotAnime: action.payload(state.hotAnime) };
-    case 'UPDATE_HOT_SHORT_DRAMAS':
-      return { ...state, hotShortDramas: action.payload(state.hotShortDramas) };
     default:
       return state;
   }
@@ -126,11 +102,9 @@ const homeReducer = (state: HomeState, action: HomeAction): HomeState => {
 // Query Options 工厂函数 - 使用新的 TanStack Query hooks
 import { favoritesQueryOptions } from '@/hooks/useFavoritesQuery';
 import { playRecordsQueryOptions } from '@/hooks/usePlayRecordsQuery';
-import { remindersQueryOptions } from '@/hooks/useRemindersQuery';
 
 const allFavoritesOptions = () => favoritesQueryOptions;
 const allPlayRecordsOptions = () => playRecordsQueryOptions;
-const allRemindersOptions = () => remindersQueryOptions;
 
 function HomeClient({ initialConfig }: {
   initialConfig: {
@@ -150,10 +124,7 @@ function HomeClient({ initialConfig }: {
   // 🔥 所有 useState 必须在最前面，保证 Hook 调用顺序稳定
   const [favoriteFilter, setFavoriteFilter] = useState<'all' | 'movie' | 'tv' | 'anime' | 'shortdrama' | 'live' | 'variety'>('all');
   const [favoriteSortBy, setFavoriteSortBy] = useState<'recent' | 'title' | 'rating'>('recent');
-  const [upcomingFilter, setUpcomingFilter] = useState<'all' | 'movie' | 'tv'>('all');
-  const [reminderFilter, setReminderFilter] = useState<'all' | 'upcoming' | 'today' | 'released'>('all');
   const [showClearFavoritesDialog, setShowClearFavoritesDialog] = useState(false);
-  const [showClearRemindersDialog, setShowClearRemindersDialog] = useState(false);
   const [requireClearConfirmation, setRequireClearConfirmation] = useState(false);
 
   // 🔥 使用 useMemo 确保 config 对象引用稳定，避免 hooks 数量变化
@@ -162,13 +133,11 @@ function HomeClient({ initialConfig }: {
     showHotTvShows: initialConfig.showHotTvShows,
     showHotVariety: initialConfig.showHotVariety,
     showNewAnime: initialConfig.showNewAnime,
-    showHotShortDramas: initialConfig.showHotShortDramas,
   }), [
     initialConfig.showHotMovies,
     initialConfig.showHotTvShows,
     initialConfig.showHotVariety,
     initialConfig.showNewAnime,
-    initialConfig.showHotShortDramas,
   ]);
 
   // 🎯 优化：使用 useReducer 合并本地状态
@@ -179,11 +148,8 @@ function HomeClient({ initialConfig }: {
     hotTvShows: [],
     hotVarietyShows: [],
     hotAnime: [],
-    hotShortDramas: [],
     bangumiCalendarData: [],
-    upcomingReleases: [],
     loading: true,
-    username: '',
     showAnnouncement: false,
     homePageConfig: initialConfig, // 🔥 使用服务端配置
   });
@@ -194,8 +160,6 @@ function HomeClient({ initialConfig }: {
     data: homeData,
     isLoading: homeLoading,
     isFetching: homeFetching,
-    errors: homeErrors,
-    refetch: refetchHomeData,
   } = useHomePageQueries(stableConfig);
 
   const { announcement } = useSite();
@@ -203,8 +167,6 @@ function HomeClient({ initialConfig }: {
   // 解构状态以便使用
   const {
     activeTab,
-    upcomingReleases,
-    username,
     showAnnouncement,
   } = state;
 
@@ -281,107 +243,7 @@ function HomeClient({ initialConfig }: {
     return dataToUse;
   }, [homeData?.hotAnime, state.hotAnime, homeFetching]);
 
-  const prevHotShortDramasRef = useRef<any[]>([]);
-  const hotShortDramas = useMemo(() => {
-    const cached = homeData?.hotShortDramas || [];
-    if (cached.length > 0) {
-      prevHotShortDramasRef.current = cached;
-    }
-    const dataToUse = cached.length === 0 && homeFetching ? prevHotShortDramasRef.current : cached;
-
-    if (state.hotShortDramas.length > 0 && dataToUse.length > 0) {
-      return dataToUse.map(d => {
-        const local = state.hotShortDramas.find(ld => ld.id === d.id);
-        return local ? { ...d, ...local } : d;
-      });
-    }
-    return dataToUse;
-  }, [homeData?.hotShortDramas, state.hotShortDramas, homeFetching]);
-
   const bangumiCalendarData = Array.isArray(homeData?.bangumiCalendar) ? homeData.bangumiCalendar : [];
-
-  // 🚀 Memoize HeroBanner items to prevent unnecessary re-renders
-  // HeroBanner uses React.memo, but items array is recreated on every render
-  // This causes memo to fail shallow comparison and re-render unnecessarily
-  const heroBannerItems = useMemo(() => [
-    // 豆瓣电影
-    ...hotMovies.slice(0, 2).map((movie) => ({
-      id: movie.id,
-      title: movie.title,
-      poster: movie.poster,
-      backdrop: movie.backdrop,
-      trailerUrl: movie.trailerUrl,
-      description: movie.plot_summary,
-      year: movie.year,
-      rate: movie.rate,
-      douban_id: Number(movie.id),
-      type: 'movie',
-    })),
-    // 豆瓣电视剧
-    ...hotTvShows.slice(0, 2).map((show) => ({
-      id: show.id,
-      title: show.title,
-      poster: show.poster,
-      backdrop: show.backdrop,
-      trailerUrl: show.trailerUrl,
-      description: show.plot_summary,
-      year: show.year,
-      rate: show.rate,
-      douban_id: Number(show.id),
-      type: 'tv',
-    })),
-    // 豆瓣综艺
-    ...hotVarietyShows.slice(0, 1).map((show) => ({
-      id: show.id,
-      title: show.title,
-      poster: show.poster,
-      backdrop: show.backdrop,
-      trailerUrl: show.trailerUrl,
-      description: show.plot_summary,
-      year: show.year,
-      rate: show.rate,
-      douban_id: Number(show.id),
-      type: 'variety',
-    })),
-    // 豆瓣动漫
-    ...hotAnime.slice(0, 1).map((anime) => ({
-      id: anime.id,
-      title: anime.title,
-      poster: anime.poster,
-      backdrop: anime.backdrop,
-      trailerUrl: anime.trailerUrl,
-      description: anime.plot_summary,
-      year: anime.year,
-      rate: anime.rate,
-      douban_id: Number(anime.id),
-      type: 'anime',
-    }))
-  ], [hotMovies, hotTvShows, hotVarietyShows, hotAnime]);
-
-  // 🚀 Fetch TMDB logos for hero banner items
-  const tmdbLogos = useTMDBLogos(
-    heroBannerItems.map(item => ({
-      title: item.title,
-      year: item.year,
-      type: item.type,
-    }))
-  );
-
-  // 🚀 Merge TMDB logos into hero banner items
-  const heroBannerItemsWithLogos = useMemo(() =>
-    heroBannerItems.map(item => ({
-      ...item,
-      tmdbLogo: tmdbLogos[item.title] || undefined,
-    })),
-    [heroBannerItems, tmdbLogos]
-  );
-
-  // 🚀 Memoize enableVideo to prevent HeroBanner remount
-  // Reading window.RUNTIME_CONFIG on every render can cause props to change
-  const enableVideo = useMemo(() => {
-    if (typeof window === 'undefined') return true; // SSR默认启用
-    return !(window as any).RUNTIME_CONFIG?.DISABLE_HERO_TRAILER;
-  }, []); // Empty deps - only read once on mount
 
   // 🚀 计算 loading 状态：使用 TanStack Query 的 isLoading 状态
   // isLoading = 任何查询正在首次加载（没有缓存数据）
@@ -390,15 +252,6 @@ function HomeClient({ initialConfig }: {
   const loading = homeLoading;
 
   // 🚀 Web Worker引用
-  const workerRef = useRef<Worker | null>(null);
-
-  // 🎯 优化：缓存问候语计算
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return '早上好';
-    if (hour < 18) return '下午好';
-    return '晚上好';
-  }, []); // 空依赖数组，只在组件挂载时计算一次
 
   // 🎯 优化：缓存今日番剧计算
   const todayAnimes = useMemo(() => {
@@ -413,7 +266,7 @@ function HomeClient({ initialConfig }: {
 
   // 🎯 优化：缓存今天的日期（用于上映日期计算）
   const today = useMemo(() => {
-    // 使用 Asia/Shanghai 时区，返回 YYYY-MM-DD 格式字符串（与 watching-updates.ts 保持一致）
+    // 使用 Asia/Shanghai 时区，返回 YYYY-MM-DD 格式字符串
     const dateStr = new Date().toLocaleDateString('zh-CN', {
       timeZone: 'Asia/Shanghai',
       year: 'numeric',
@@ -427,9 +280,6 @@ function HomeClient({ initialConfig }: {
   useEffect(() => {
     // 获取用户名
     const authInfo = getAuthInfoFromBrowserCookie();
-    if (authInfo?.username) {
-      dispatch({ type: 'SET_USERNAME', payload: authInfo.username });
-    }
 
     // 读取清空确认设置
     if (typeof window !== 'undefined') {
@@ -453,20 +303,8 @@ function HomeClient({ initialConfig }: {
   // 🚀 TanStack Query - 使用 useQuery 获取收藏数据（自动缓存，跨页面持久化）
   const { data: allFavorites = {} } = useQuery(allFavoritesOptions());
 
-  // 🚀 TanStack Query - 追番更新后台检查（30分钟自动刷新）
-  // 在主页启用，让 query 保持 active 状态，refetchInterval 才能工作
-  const authInfo = getAuthInfoFromBrowserCookie();
-  const storageType = typeof window !== 'undefined' ? localStorage.getItem('storageType') : null;
-  const showWatchingUpdates = authInfo?.username && storageType !== 'localstorage';
-  useWatchingUpdatesQuery({
-    enabled: showWatchingUpdates, // 只在登录且非 localStorage 模式时启用
-  });
-
   // 🚀 TanStack Query - 使用 useQuery 获取播放记录（自动缓存，跨页面持久化）
   const { data: allPlayRecords = {} } = useQuery(allPlayRecordsOptions());
-
-  // 🚀 TanStack Query - 使用 useQuery 获取提醒数据（自动缓存，跨页面持久化）
-  const { data: allReminders = {} } = useQuery(allRemindersOptions());
 
   // 收藏夹数据
   type FavoriteItem = {
@@ -516,33 +354,6 @@ function HomeClient({ initialConfig }: {
       });
   }, [allFavorites, allPlayRecords]);
 
-  // 🚀 TanStack Query - 使用 useMemo 计算提醒列表（自动响应数据变化）
-  const reminderItems = useMemo(() => {
-    // 根据保存时间排序（从近到远）
-    return Object.entries(allReminders)
-      .sort(([, a], [, b]) => b.save_time - a.save_time)
-      .map(([key, reminder]) => {
-        const plusIndex = key.indexOf('+');
-        const source = key.slice(0, plusIndex);
-        const id = key.slice(plusIndex + 1);
-
-        return {
-          id,
-          source,
-          title: reminder.title,
-          year: reminder.year,
-          poster: reminder.cover,
-          episodes: reminder.total_episodes,
-          source_name: reminder.source_name,
-          search_title: reminder?.search_title,
-          origin: reminder?.origin,
-          type: reminder?.type,
-          releaseDate: reminder.releaseDate,
-          remarks: reminder?.remarks,
-        };
-      });
-  }, [allReminders]);
-
   // 🎯 优化：缓存收藏夹统计信息计算
   const favoriteStats = useMemo(() => {
     if (favoriteItems.length === 0) return null;
@@ -579,228 +390,9 @@ function HomeClient({ initialConfig }: {
     };
   }, [favoriteItems]);
 
-  useEffect(() => {
-    // 清理过期缓存
-    cleanExpiredCache().catch(console.error);
-
-    // 清除可能缓存了空数据的短剧推荐缓存
-    clearRecommendsCache().catch(console.error);
-
-    // 🔥 配置已经从服务端传入，不需要客户端再次获取
-
-    // 🚀 TanStack Query 会自动加载数据，无需手动调用
-
-    // 🚀 清理Web Worker
-    return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-        console.log('📅 [Main] Web Worker已清理');
-      }
-    };
-  }, []);
-
-  // 如果首页数据加载完成但热门短剧为空，强制刷新（可能之前缓存了空数据）
-  useEffect(() => {
-    if (homeData && homeData.hotShortDramas.length === 0 && !homeLoading) {
-      console.log('[TanStack Query] 热门短剧为空，强制刷新首页数据');
-      refetchHomeData();
-    }
-  }, [homeData, homeLoading, refetchHomeData]);
-
-  // 🚀 当 GlobalCache 数据加载完成后，延迟加载详情数据
-  // 🔥 只加载显示模块的详情，节省带宽和性能
-  useEffect(() => {
-    if (!homeData) return;
-
-    // 延迟加载电影详情 - 只在显示电影模块时加载
-    if (state.homePageConfig.showHotMovies && homeData.hotMovies.length > 0) {
-      setTimeout(() => {
-        Promise.all(
-          homeData.hotMovies.slice(0, 2).map(async (movie) => {
-            try {
-              const detailsRes = await getDoubanDetails(movie.id);
-              if (detailsRes.code === 200 && detailsRes.data) {
-                return {
-                  id: movie.id,
-                  plot_summary: detailsRes.data.plot_summary,
-                  backdrop: detailsRes.data.backdrop,
-                  trailerUrl: detailsRes.data.trailerUrl,
-                };
-              }
-            } catch (error) {
-              console.warn(`获取电影 ${movie.id} 详情失败:`, error);
-            }
-            return null;
-          })
-        ).then((results) => {
-          dispatch({
-            type: 'UPDATE_HOT_MOVIES',
-            payload: (prev) => {
-              const base = prev.length > 0 ? prev : homeData.hotMovies;
-              return base.map(m => {
-                const detail = results.find(r => r?.id === m.id);
-                return detail ? { ...m, ...detail } : m;
-              });
-            }
-          });
-        });
-      }, 2000);
-    }
-
-    // 延迟加载剧集详情 - 只在显示剧集模块时加载
-    if (state.homePageConfig.showHotTvShows && homeData.hotTvShows.length > 0) {
-      setTimeout(() => {
-        Promise.all(
-          homeData.hotTvShows.slice(0, 2).map(async (show) => {
-            try {
-              const detailsRes = await getDoubanDetails(show.id);
-              if (detailsRes.code === 200 && detailsRes.data) {
-                return {
-                  id: show.id,
-                  plot_summary: detailsRes.data.plot_summary,
-                  backdrop: detailsRes.data.backdrop,
-                  trailerUrl: detailsRes.data.trailerUrl,
-                };
-              }
-            } catch (error) {
-              console.warn(`获取剧集 ${show.id} 详情失败:`, error);
-            }
-            return null;
-          })
-        ).then((results) => {
-          dispatch({
-            type: 'UPDATE_HOT_TV_SHOWS',
-            payload: (prev) => {
-              const base = prev.length > 0 ? prev : homeData.hotTvShows;
-              return base.map(s => {
-                const detail = results.find(r => r?.id === s.id);
-                return detail ? { ...s, ...detail } : s;
-              });
-            }
-          });
-        });
-      }, 2000);
-    }
-
-    // 延迟加载动漫详情 - 只在显示动漫模块时加载
-    if (state.homePageConfig.showNewAnime && homeData.hotAnime.length > 0) {
-      setTimeout(() => {
-        const anime = homeData.hotAnime[0];
-        getDoubanDetails(anime.id)
-          .then((detailsRes) => {
-            if (detailsRes.code === 200 && detailsRes.data) {
-              dispatch({
-                type: 'UPDATE_HOT_ANIME',
-                payload: (prev) => {
-                  const base = prev.length > 0 ? prev : homeData.hotAnime;
-                  return base.map(a => a.id === anime.id ? { ...a, ...detailsRes.data } : a);
-                }
-              });
-            }
-          })
-          .catch((error) => {
-            console.warn(`获取动漫 ${anime.id} 详情失败:`, error);
-          });
-      }, 3000);
-    }
-
-    // 延迟加载综艺详情 - 只在显示综艺模块时加载
-    if (state.homePageConfig.showHotVariety && homeData.hotVarietyShows.length > 0) {
-      setTimeout(() => {
-        const show = homeData.hotVarietyShows[0];
-        getDoubanDetails(show.id)
-          .then((detailsRes) => {
-            if (detailsRes.code === 200 && detailsRes.data) {
-              dispatch({
-                type: 'UPDATE_HOT_VARIETY_SHOWS',
-                payload: (prev) => {
-                  const base = prev.length > 0 ? prev : homeData.hotVarietyShows;
-                  return base.map(s => s.id === show.id ? { ...s, ...detailsRes.data } : s);
-                }
-              });
-            }
-          })
-          .catch((error) => {
-            console.warn(`获取综艺 ${show.id} 详情失败:`, error);
-          });
-      }, 3000);
-    }
-
-    // 🔄 异步加载即将上映数据
-    fetch('/api/release-calendar?limit=100')
-      .then(res => {
-        if (!res.ok) {
-          console.error('获取即将上映数据失败，状态码:', res.status);
-          return { items: [] };
-        }
-        return res.json();
-      })
-      .then(upcomingData => {
-        if (upcomingData?.items) {
-          const releases = upcomingData.items;
-          console.log('📅 获取到的即将上映数据:', releases.length, '条');
-
-          // 初始化Web Worker
-          if (!workerRef.current && typeof window !== 'undefined' && window.Worker) {
-            try {
-              workerRef.current = new Worker(new URL('../workers/releaseCalendar.worker.ts', import.meta.url));
-
-              workerRef.current.onmessage = (e: MessageEvent) => {
-                const { selectedItems, stats, error } = e.data;
-
-                if (error) {
-                  console.error('📅 [Worker] 处理失败:', error);
-                  dispatch({ type: 'SET_UPCOMING_RELEASES', payload: [] });
-                  return;
-                }
-
-                console.log('📅 [Main] Worker处理完成，分配结果:', stats);
-                dispatch({ type: 'SET_UPCOMING_RELEASES', payload: selectedItems });
-              };
-
-              workerRef.current.onerror = (error) => {
-                console.error('📅 [Worker] 错误:', error);
-                dispatch({ type: 'SET_UPCOMING_RELEASES', payload: [] });
-              };
-            } catch (error) {
-              console.error('📅 [Worker] 初始化失败:', error);
-              dispatch({ type: 'SET_UPCOMING_RELEASES', payload: [] });
-            }
-          }
-
-          // 发送数据到Worker处理
-          if (workerRef.current) {
-            // 使用 Asia/Shanghai 时区
-            const todayStr = new Date().toLocaleDateString('zh-CN', {
-              timeZone: 'Asia/Shanghai',
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit'
-            }).split('/').join('-'); // 转换为 YYYY-MM-DD 格式
-
-            workerRef.current.postMessage({
-              releases,
-              today: todayStr,
-            });
-          } else {
-            console.warn('📅 Web Worker不可用，跳过即将上映数据处理');
-            dispatch({ type: 'SET_UPCOMING_RELEASES', payload: [] });
-          }
-        }
-      })
-      .catch(error => {
-        console.warn('获取即将上映数据失败:', error);
-        dispatch({ type: 'SET_UPCOMING_RELEASES', payload: [] });
-      });
-  }, [homeData, state.homePageConfig]);
-
   // 🚀 TanStack Query - 使用 useMutation 管理清空收藏操作
   // 特性：乐观更新（立即清空 UI）+ 错误回滚（失败时恢复数据）
   const clearFavoritesMutation = useClearFavoritesMutation();
-
-  // 🚀 TanStack Query - 使用 useMutation 管理清空提醒操作
-  const clearRemindersMutation = useClearRemindersMutation();
 
   const handleCloseAnnouncement = (announcement: string) => {
     dispatch({ type: 'SET_SHOW_ANNOUNCEMENT', payload: false });
@@ -824,216 +416,24 @@ function HomeClient({ initialConfig }: {
       {/* Telegram 新用户欢迎弹窗 */}
       <TelegramWelcomeModal />
 
-      <div className='overflow-visible -mt-6 md:mt-0 pb-32 md:pb-safe-bottom'>
-        {/* 欢迎横幅 - 现代化精简设计 */}
-        <div className='mb-6 relative overflow-hidden rounded-xl bg-linear-to-r from-blue-500/90 via-purple-500/90 to-pink-500/90 backdrop-blur-sm shadow-xl border border-white/20'>
-          <div className='relative p-4 sm:p-5'>
-            {/* 动态渐变背景 */}
-            <div className='absolute inset-0 bg-linear-to-br from-white/5 via-transparent to-black/5'></div>
-
-            <div className='relative z-10 flex items-center justify-between gap-4'>
-              <div className='flex-1 min-w-0'>
-                <h2 className='text-lg sm:text-xl font-bold text-white mb-1 flex items-center gap-2 flex-wrap'>
-                  <span>
-                    {greeting}
-                    {username && '，'}
-                  </span>
-                  {username && (
-                    <span className='text-yellow-300 font-semibold'>
-                      {username}
-                    </span>
-                  )}
-                  <span className='inline-block animate-wave origin-bottom-right'>👋</span>
-                </h2>
-                <p className='text-sm text-white/90'>
-                  发现更多精彩影视内容 ✨
-                </p>
-              </div>
-
-              {/* 装饰图标 - 更小更精致 */}
-              <div className='hidden md:flex items-center justify-center shrink-0 w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-white/20'>
-                <Film className='w-6 h-6 text-white' />
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <div className='overflow-visible -mt-6 pb-[calc(1rem+env(safe-area-inset-bottom))] md:mt-0 md:pb-2'>
         {/* 顶部 Tab 切换 - AI 按钮已移至右上角导航栏 */}
         <div className='mb-8 flex items-center justify-center'>
           <CapsuleSwitch
             options={[
               { label: '首页', value: 'home' },
               { label: '收藏夹', value: 'favorites' },
-              { label: '想看', value: 'reminders' },
+              { label: '继续观看', value: 'continue' },
             ]}
             active={activeTab}
-            onChange={(value) => startTransition(() => dispatch({ type: 'SET_ACTIVE_TAB', payload: value as 'home' | 'favorites' | 'reminders' }))}
+            onChange={(value) => startTransition(() => dispatch({ type: 'SET_ACTIVE_TAB', payload: value as 'home' | 'favorites' | 'continue' }))}
           />
         </div>
 
         <div className={`w-full mx-auto ${isPending ? 'opacity-70 transition-opacity duration-150' : ''}`}>
-          {activeTab === 'reminders' ? (
-            // 想看视图
-            <section className='mb-8'>
-              <div className='mb-6 flex items-center justify-between'>
-                <h2 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
-                  我想看
-                </h2>
-                {reminderItems.length > 0 && (
-                  <button
-                    className='flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-white hover:bg-red-600 dark:text-red-400 dark:hover:text-white dark:hover:bg-red-500 border border-red-300 dark:border-red-700 hover:border-red-600 dark:hover:border-red-500 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md'
-                    onClick={() => {
-                      if (requireClearConfirmation) {
-                        setShowClearRemindersDialog(true);
-                      } else {
-                        clearRemindersMutation.mutate();
-                      }
-                    }}
-                  >
-                    <Trash2 className='w-4 h-4' />
-                    <span>清空想看</span>
-                  </button>
-                )}
-              </div>
-
-              {/* 筛选标签 */}
-              {reminderItems.length > 0 && (
-                <div className='mb-4 flex flex-wrap gap-2'>
-                  {[
-                    { key: 'all' as const, label: '全部', icon: '📚' },
-                    { key: 'upcoming' as const, label: '即将上映', icon: '⏰' },
-                    { key: 'today' as const, label: '今日上映', icon: '🎉' },
-                    { key: 'released' as const, label: '已上映', icon: '✅' },
-                  ].map(({ key, label, icon }) => (
-                    <button
-                      key={key}
-                      onClick={() => setReminderFilter(key)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                        reminderFilter === key
-                          ? 'bg-linear-to-r from-orange-500 to-red-500 text-white shadow-lg scale-105'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      <span className='mr-1'>{icon}</span>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className='justify-start grid grid-cols-3 gap-x-2 gap-y-14 sm:gap-y-20 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8'>
-                {(() => {
-                  // 筛选
-                  let filtered = reminderItems;
-                  if (reminderFilter === 'upcoming') {
-                    filtered = reminderItems.filter(item => {
-                      if (!item.releaseDate) return false;
-                      return item.releaseDate > today;
-                    });
-                  } else if (reminderFilter === 'today') {
-                    filtered = reminderItems.filter(item => {
-                      if (!item.releaseDate) return false;
-                      return item.releaseDate === today;
-                    });
-                  } else if (reminderFilter === 'released') {
-                    filtered = reminderItems.filter(item => {
-                      if (!item.releaseDate) return false;
-                      return item.releaseDate < today;
-                    });
-                  }
-
-                  return filtered.map((item) => {
-                    // 智能计算上映状态
-                    let calculatedRemarks = item.remarks;
-
-                    if (item.releaseDate) {
-                      // 使用字符串比较（YYYY-MM-DD 格式可以直接比较）
-                      const releaseDate = item.releaseDate; // "YYYY-MM-DD"
-
-                      if (releaseDate < today) {
-                        // 已上映：计算天数差
-                        const releaseParts = releaseDate.split('-').map(Number);
-                        const todayParts = today.split('-').map(Number);
-                        const releaseMs = new Date(releaseParts[0], releaseParts[1] - 1, releaseParts[2]).getTime();
-                        const todayMs = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]).getTime();
-                        const daysAgo = Math.floor((todayMs - releaseMs) / (1000 * 60 * 60 * 24));
-                        calculatedRemarks = `已上映${daysAgo}天`;
-                      } else if (releaseDate === today) {
-                        calculatedRemarks = '今日上映';
-                      } else {
-                        // 即将上映：计算天数差
-                        const releaseParts = releaseDate.split('-').map(Number);
-                        const todayParts = today.split('-').map(Number);
-                        const releaseMs = new Date(releaseParts[0], releaseParts[1] - 1, releaseParts[2]).getTime();
-                        const todayMs = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]).getTime();
-                        const daysUntil = Math.ceil((releaseMs - todayMs) / (1000 * 60 * 60 * 24));
-                        calculatedRemarks = `${daysUntil}天后上映`;
-                      }
-                    }
-
-                    return (
-                      <div key={item.id + item.source} className='w-full'>
-                        <VideoCard
-                          query={item.search_title}
-                          {...item}
-                          from='reminder'
-                          remarks={calculatedRemarks}
-                          releaseDate={item.releaseDate}
-                        />
-                      </div>
-                    );
-                  });
-                })()}
-                {reminderItems.length === 0 && (
-                  <div className='col-span-full flex flex-col items-center justify-center py-16 px-4'>
-                    <div className='mb-6 relative'>
-                      <div className='absolute inset-0 bg-linear-to-r from-orange-300 to-red-300 dark:from-orange-600 dark:to-red-600 opacity-20 blur-3xl rounded-full animate-pulse'></div>
-                      <svg className='w-32 h-32 relative z-10' viewBox='0 0 200 200' fill='none' xmlns='http://www.w3.org/2000/svg'>
-                        <path d='M100 50 L100 120 M100 50 L130 80'
-                          className='stroke-gray-400 dark:stroke-gray-500'
-                          strokeWidth='8'
-                          strokeLinecap='round'
-                          strokeLinejoin='round'
-                        />
-                        <circle cx='100' cy='100' r='70'
-                          className='fill-gray-300 dark:fill-gray-600 stroke-gray-400 dark:stroke-gray-500'
-                          strokeWidth='3'
-                        />
-                        <path d='M100 50 L100 120 M100 50 L130 80'
-                          fill='none'
-                          stroke='currentColor'
-                          strokeWidth='2'
-                          strokeDasharray='5,5'
-                          className='text-gray-400 dark:text-gray-500'
-                        />
-                      </svg>
-                    </div>
-
-                    <h3 className='text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2'>
-                      暂无想看内容
-                    </h3>
-                    <p className='text-sm text-gray-500 dark:text-gray-400 text-center max-w-xs'>
-                      发现即将上映的内容，点击 🔔 标记想看吧！
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* 确认对话框 */}
-              <ConfirmDialog
-                isOpen={showClearRemindersDialog}
-                title="确认清空想看"
-                message={`确定要清空所有想看内容吗？\n\n这将删除 ${reminderItems.length} 项内容，此操作无法撤销。`}
-                confirmText="确认清空"
-                cancelText="取消"
-                variant="danger"
-                onConfirm={() => {
-                  clearRemindersMutation.mutate();
-                  setShowClearRemindersDialog(false);
-                }}
-                onCancel={() => setShowClearRemindersDialog(false)}
-              />
-            </section>
+          {activeTab === 'continue' ? (
+            // 继续观看视图
+            <ContinueWatching />
           ) : activeTab === 'favorites' ? (
             // 收藏夹视图
             <section className='mb-8'>
@@ -1303,125 +703,6 @@ function HomeClient({ initialConfig }: {
           ) : (
             // 首页视图
             <>
-              {/* Hero Banner 轮播 */}
-              {state.homePageConfig.showHeroBanner && heroBannerItemsWithLogos.length > 0 && (
-                <section className='mb-8'>
-                  <HeroBanner
-                    items={heroBannerItemsWithLogos}
-                    autoPlayInterval={8000}
-                    showControls={true}
-                    showIndicators={true}
-                    enableVideo={enableVideo}
-                  />
-                </section>
-              )}
-
-              {/* 继续观看 */}
-              {/* 继续观看 */}
-              {state.homePageConfig.showContinueWatching && <ContinueWatching />}
-
-              {/* 即将上映 */}
-              {(() => {
-                console.log('🔍 即将上映 section 渲染检查:', { loading, upcomingReleasesCount: upcomingReleases.length });
-                return null;
-              })()}
-              {state.homePageConfig.showUpcomingReleases && upcomingReleases.length > 0 && (
-                <section className='mb-8'>
-                  <div className='mb-4 flex items-center justify-between'>
-                    <SectionTitle title="即将上映" icon={Calendar} iconColor="text-orange-500" />
-                    <Link
-                      href='/release-calendar'
-                      className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors'
-                    >
-                      查看更多
-                      <ChevronRight className='w-4 h-4 ml-1' />
-                    </Link>
-                  </div>
-
-                  {/* Tab 切换 */}
-                  <div className='mb-4 flex gap-2'>
-                    {[
-                      { key: 'all', label: '全部', count: upcomingReleases.length },
-                      { key: 'movie', label: '电影', count: upcomingReleases.filter(r => r.type === 'movie').length },
-                      { key: 'tv', label: '电视剧', count: upcomingReleases.filter(r => r.type === 'tv').length },
-                    ].map(({ key, label, count }) => (
-                      <button
-                        key={key}
-                        onClick={() => setUpcomingFilter(key as 'all' | 'movie' | 'tv')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          upcomingFilter === key
-                            ? 'bg-orange-500 text-white shadow-md'
-                            : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        {label}
-                        {count > 0 && (
-                          <span className={`ml-1.5 text-xs ${
-                            upcomingFilter === key
-                              ? 'text-white/80'
-                              : 'text-gray-500 dark:text-gray-400'
-                          }`}>
-                            ({count})
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-
-                  <ScrollableRow enableVirtualization={true}>
-                    {upcomingReleases
-                      .filter(release => upcomingFilter === 'all' || release.type === upcomingFilter)
-                      .map((release, index) => {
-                        // 计算距离上映还有几天（使用字符串比较）
-                        const releaseDate = release.releaseDate; // "YYYY-MM-DD"
-
-                        let remarksText;
-                        if (releaseDate < today) {
-                          // 已上映：计算天数差
-                          const releaseParts = releaseDate.split('-').map(Number);
-                          const todayParts = today.split('-').map(Number);
-                          const releaseMs = new Date(releaseParts[0], releaseParts[1] - 1, releaseParts[2]).getTime();
-                          const todayMs = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]).getTime();
-                          const daysAgo = Math.floor((todayMs - releaseMs) / (1000 * 60 * 60 * 24));
-                          remarksText = `已上映${daysAgo}天`;
-                        } else if (releaseDate === today) {
-                          remarksText = '今日上映';
-                        } else {
-                          // 即将上映：计算天数差
-                          const releaseParts = releaseDate.split('-').map(Number);
-                          const todayParts = today.split('-').map(Number);
-                          const releaseMs = new Date(releaseParts[0], releaseParts[1] - 1, releaseParts[2]).getTime();
-                          const todayMs = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]).getTime();
-                          const daysUntil = Math.ceil((releaseMs - todayMs) / (1000 * 60 * 60 * 24));
-                          remarksText = `${daysUntil}天后上映`;
-                        }
-
-                      return (
-                        <div
-                          key={`${release.id}-${index}`}
-                          className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
-                        >
-                          <VideoCard
-                            source='upcoming_release'
-                            id={release.id}
-                            source_name='即将上映'
-                            from='douban'
-                            title={release.title}
-                            poster={release.cover || '/placeholder-poster.jpg'}
-                            year={release.releaseDate.split('-')[0]}
-                            type={release.type}
-                            remarks={remarksText}
-                            releaseDate={release.releaseDate}
-                            query={release.title}
-                            episodes={release.episodes || (release.type === 'tv' ? undefined : 1)}
-                          />
-                        </div>
-                      );
-                    })}
-                  </ScrollableRow>
-                </section>
-              )}
-
               {/* 热门电影 */}
               {state.homePageConfig.showHotMovies && (
               <section className='mb-8'>
@@ -1601,36 +882,6 @@ function HomeClient({ initialConfig }: {
               </section>
               )}
 
-              {/* 热门短剧 */}
-              {state.homePageConfig.showHotShortDramas && (
-              <section className='mb-8'>
-                <div className='mb-4 flex items-center justify-between'>
-                  <SectionTitle title="热门短剧" icon={Play} iconColor="text-orange-500" />
-                  <Link
-                    href='/shortdrama'
-                    className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors'
-                  >
-                    查看更多
-                    <ChevronRight className='w-4 h-4 ml-1' />
-                  </Link>
-                </div>
-                <ScrollableRow enableVirtualization={true}>
-                  {loading
-                    ? // 加载状态显示灰色占位数据
-                    Array.from({ length: 8 }).map((_, index) => (
-                      <SkeletonCard key={index} />
-                    ))
-                    : // 显示真实数据
-                    hotShortDramas.map((drama, index) => (
-                      <ShortDramaCard
-                        key={index}
-                        drama={drama}
-                        className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
-                      />
-                    ))}
-                </ScrollableRow>
-              </section>
-              )}
             </>
           )}
         </div>

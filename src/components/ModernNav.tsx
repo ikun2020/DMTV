@@ -2,10 +2,12 @@
 
 'use client';
 
-import { Cat, Clover, Film, FolderOpen, Globe, Home, MoreHorizontal, PlaySquare, Radio, Search, Sparkles, Star, Tv, X } from 'lucide-react';
+import { Cat, Clover, Film, FolderOpen, Globe, Home, MoreHorizontal, Radio, Search, Sparkles, Star, Tv, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useQuery, queryOptions } from '@tanstack/react-query';
+
+import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 
 import { FastLink } from './FastLink';
 import { ThemeToggle } from './ThemeToggle';
@@ -30,9 +32,9 @@ const userEmbyConfigOptions = () => queryOptions({
   queryKey: ['user', 'emby-config'],
   queryFn: async () => {
     const res = await fetch('/api/user/emby-config');
-    if (!res.ok) return null;
+    if (!res.ok) return { sources: [] };
     const data = await res.json();
-    return data.config;
+    return data.config?.sources ? data.config : { sources: [] };
   },
   staleTime: 5 * 60 * 1000,
   retry: false,
@@ -94,13 +96,6 @@ export default function ModernNav({ showAIButton = false, onAIButtonClick }: Mod
       gradient: 'from-blue-600 to-indigo-600',
     },
     {
-      icon: PlaySquare,
-      label: '短剧',
-      href: '/shortdrama',
-      color: 'text-purple-500',
-      gradient: 'from-purple-500 to-violet-500',
-    },
-    {
       icon: Cat,
       label: '动漫',
       href: '/douban?type=anime',
@@ -117,10 +112,17 @@ export default function ModernNav({ showAIButton = false, onAIButtonClick }: Mod
   ]);
 
   // 检查用户是否配置了 Emby
-  const { data: userEmbyConfig } = useQuery(userEmbyConfigOptions());
+  const authInfo = getAuthInfoFromBrowserCookie();
+  const { data: userEmbyConfig } = useQuery({
+    ...userEmbyConfigOptions(),
+    enabled: Boolean(authInfo?.username && !authInfo.guest),
+  });
 
   // 检查管理员是否设置了公共源
-  const { data: publicSourcesData } = useQuery(publicSourcesOptions());
+  const { data: publicSourcesData } = useQuery({
+    ...publicSourcesOptions(),
+    enabled: Boolean(authInfo?.username && !authInfo.guest),
+  });
 
   useEffect(() => {
     const runtimeConfig = (window as any).RUNTIME_CONFIG;

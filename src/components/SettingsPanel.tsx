@@ -5,7 +5,6 @@
 import {
   Check,
   ChevronDown,
-  ExternalLink,
   X,
 } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -17,6 +16,7 @@ import { useEmbyConfigQuery } from '@/hooks/useUserMenuQueries';
 interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  guest?: boolean;
 }
 
 function readLS<T>(key: string, fallback: T): T {
@@ -63,21 +63,7 @@ const doubanImageProxyTypeOptions = [
 const bufferModeOptions = [
   { value: 'standard' as const, label: '默认模式', description: '标准缓冲设置，适合网络稳定的环境', icon: '🎯', color: 'green' },
   { value: 'enhanced' as const, label: '增强模式', description: '1.5倍缓冲，适合偶尔卡顿的网络环境', icon: '⚡', color: 'blue' },
-  { value: 'max' as const, label: '强力模式', description: '3倍大缓冲，起播稍慢但播放更流畅', icon: '🚀', color: 'purple' },
 ];
-
-function getThanksInfo(dataSource: string) {
-  switch (dataSource) {
-    case 'cors-proxy-zwei':
-      return { text: 'Thanks to @Zwei', url: 'https://github.com/bestzwei' };
-    case 'cmliussss-cdn-tencent':
-    case 'cmliussss-cdn-ali':
-    case 'cmliussss-unified':
-      return { text: 'Thanks to @CMLiussss', url: 'https://github.com/cmliu' };
-    default:
-      return null;
-  }
-}
 
 const Toggle = memo(({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
   <label className='flex items-center cursor-pointer'>
@@ -90,14 +76,13 @@ const Toggle = memo(({ checked, onChange }: { checked: boolean; onChange: (v: bo
 ));
 Toggle.displayName = 'Toggle';
 
-export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
+export const SettingsPanel = memo(({ isOpen, onClose, guest = false }: SettingsPanelProps) => {
   // ── Settings state (localStorage-backed) ──────────────────────────────────
   const [defaultAggregateSearch, setDefaultAggregateSearch] = useState(true);
   const [doubanProxyUrl, setDoubanProxyUrl] = useState('');
   const [enableOptimization, setEnableOptimization] = useState(false);
   const [fluidSearch, setFluidSearch] = useState(true);
-  const [liveDirectConnect, setLiveDirectConnect] = useState(false);
-  const [playerBufferMode, setPlayerBufferMode] = useState<'standard' | 'enhanced' | 'max'>('standard');
+  const [playerBufferMode, setPlayerBufferMode] = useState<'standard' | 'enhanced'>('standard');
   const [doubanDataSource, setDoubanDataSource] = useState('direct');
   const [doubanImageProxyType, setDoubanImageProxyType] = useState('direct');
   const [doubanImageProxyUrl, setDoubanImageProxyUrl] = useState('');
@@ -108,7 +93,7 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
   const [enableAutoNextEpisode, setEnableAutoNextEpisode] = useState(true);
   const [requireClearConfirmation, setRequireClearConfirmation] = useState(false);
   const [downloadFormat, setDownloadFormat] = useState<'TS' | 'MP4'>('TS');
-  const [exactSearch, setExactSearch] = useState(true);
+  const [exactSearch, setExactSearch] = useState(false);
   const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
   const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] = useState(false);
   const [isBangumiApiDropdownOpen, setIsBangumiApiDropdownOpen] = useState(false);
@@ -119,7 +104,8 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
   const [bangumiImageProxyUrl, setBangumiImageProxyUrl] = useState('');
 
   // ── Emby config via TanStack Query ────────────────────────────────────────
-  const { data: embyConfig = { sources: [] } } = useEmbyConfigQuery(isOpen);
+  const { data: embyConfig } = useEmbyConfigQuery(isOpen && !guest);
+  const safeEmbyConfig = embyConfig?.sources ? embyConfig : { sources: [] };
 
   // ── Load settings from localStorage on mount ──────────────────────────────
   useEffect(() => {
@@ -129,7 +115,6 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
     setDefaultAggregateSearch(readLS('defaultAggregateSearch', true));
     setEnableOptimization(readLS('enableOptimization', false));
     setFluidSearch(readLS('fluidSearch', RC.FLUID_SEARCH !== false));
-    setLiveDirectConnect(readLS('liveDirectConnect', false));
     setDoubanProxyUrl(readLS('doubanProxyUrl', RC.DOUBAN_PROXY || ''));
     setDoubanDataSource(localStorage.getItem('doubanDataSource') ?? RC.DOUBAN_PROXY_TYPE ?? 'direct');
     setDoubanImageProxyType(localStorage.getItem('doubanImageProxyType') ?? RC.DOUBAN_IMAGE_PROXY_TYPE ?? 'server');
@@ -148,7 +133,11 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
     if (fmt === 'TS' || fmt === 'MP4') setDownloadFormat(fmt);
     const es = localStorage.getItem('exactSearch');
     if (es !== null) setExactSearch(es === 'true');
-    setPlayerBufferMode(readLS('playerBufferMode', 'standard'));
+    const storedBufferMode = localStorage.getItem('playerBufferMode');
+    const normalizedBufferMode = storedBufferMode === 'enhanced' ? 'enhanced' : 'standard';
+    setPlayerBufferMode(normalizedBufferMode);
+    if (storedBufferMode === 'max') localStorage.setItem('playerBufferMode', 'standard');
+    localStorage.removeItem('liveDirectConnect');
   }, []);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -161,7 +150,6 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
   const handleAggregateToggle = set(setDefaultAggregateSearch, 'defaultAggregateSearch');
   const handleOptimizationToggle = set(setEnableOptimization, 'enableOptimization');
   const handleFluidSearchToggle = set(setFluidSearch, 'fluidSearch');
-  const handleLiveDirectConnectToggle = set(setLiveDirectConnect, 'liveDirectConnect');
   const handleRequireClearConfirmationToggle = set(setRequireClearConfirmation, 'requireClearConfirmation');
   const handleDownloadFormatChange = set<'TS' | 'MP4'>(setDownloadFormat, 'downloadFormat', false);
   const handleExactSearchToggle = (v: boolean) => { setExactSearch(v); localStorage.setItem('exactSearch', String(v)); };
@@ -173,7 +161,7 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
   const handleBangumiApiProxyChange = (v: string) => { setBangumiApiProxy(v); localStorage.setItem('bangumiApiProxy', v); };
   const handleBangumiImageProxyTypeChange = (v: string) => { setBangumiImageProxyType(v); localStorage.setItem('bangumiImageProxyType', v); };
   const handleBangumiImageProxyUrlChange = (v: string) => { setBangumiImageProxyUrl(v); localStorage.setItem('bangumiImageProxyUrl', v); };
-  const handleBufferModeChange = (v: 'standard' | 'enhanced' | 'max') => { setPlayerBufferMode(v); localStorage.setItem('playerBufferMode', v); };
+  const handleBufferModeChange = (v: 'standard' | 'enhanced') => { setPlayerBufferMode(v); localStorage.setItem('playerBufferMode', v); };
   const handleContinueWatchingMinProgressChange = (v: number) => { setContinueWatchingMinProgress(v); localStorage.setItem('continueWatchingMinProgress', v.toString()); };
   const handleContinueWatchingMaxProgressChange = (v: number) => { setContinueWatchingMaxProgress(v); localStorage.setItem('continueWatchingMaxProgress', v.toString()); };
   const handleEnableContinueWatchingFilterToggle = set(setEnableContinueWatchingFilter, 'enableContinueWatchingFilter');
@@ -201,7 +189,6 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
     setDefaultAggregateSearch(true);
     setEnableOptimization(false);
     setFluidSearch(defaultFluidSearch);
-    setLiveDirectConnect(false);
     setDoubanProxyUrl(defaultDoubanProxy);
     setDoubanDataSource(defaultDoubanProxyType);
     setDoubanImageProxyType(defaultDoubanImageProxyType);
@@ -217,11 +204,11 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
     setEnableAutoNextEpisode(true);
     setPlayerBufferMode('standard');
     setDownloadFormat('TS');
+    setExactSearch(false);
 
     localStorage.setItem('defaultAggregateSearch', JSON.stringify(true));
     localStorage.setItem('enableOptimization', JSON.stringify(false));
     localStorage.setItem('fluidSearch', JSON.stringify(defaultFluidSearch));
-    localStorage.setItem('liveDirectConnect', JSON.stringify(false));
     localStorage.setItem('doubanProxyUrl', defaultDoubanProxy);
     localStorage.setItem('doubanDataSource', defaultDoubanProxyType);
     localStorage.setItem('doubanImageProxyType', defaultDoubanImageProxyType);
@@ -238,6 +225,7 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
     localStorage.setItem('requireClearConfirmation', JSON.stringify(false));
     localStorage.setItem('playerBufferMode', 'standard');
     localStorage.setItem('downloadFormat', 'TS');
+    localStorage.setItem('exactSearch', 'false');
   };
 
   if (!isOpen) return null;
@@ -284,16 +272,20 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
 
           {/* 设置项 */}
           <div className='space-y-6'>
-            {/* Emby 配置 */}
-            <div className='space-y-3'>
-              <div>
-                <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>Emby私人影库</h4>
-                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>配置你的私人 Emby 服务器</p>
-              </div>
-              <UserEmbyConfig initialConfig={embyConfig} />
-            </div>
+            {!guest && (
+              <>
+                {/* Emby 配置 */}
+                <div className='space-y-3'>
+                  <div>
+                    <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>Emby私人影库</h4>
+                    <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>配置你的私人 Emby 服务器</p>
+                  </div>
+                  <UserEmbyConfig initialConfig={safeEmbyConfig} />
+                </div>
 
-            <div className='border-t border-gray-200 dark:border-gray-700'></div>
+                <div className='border-t border-gray-200 dark:border-gray-700'></div>
+              </>
+            )}
 
             {/* 豆瓣数据源 */}
             <div className='space-y-3'>
@@ -328,18 +320,6 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
                   </div>
                 )}
               </div>
-              {getThanksInfo(doubanDataSource) && (
-                <div className='mt-3'>
-                  <button
-                    type='button'
-                    onClick={() => window.open(getThanksInfo(doubanDataSource)!.url, '_blank')}
-                    className='flex items-center justify-center gap-1.5 w-full px-3 text-xs text-gray-500 dark:text-gray-400 cursor-pointer'
-                  >
-                    <span className='font-medium'>{getThanksInfo(doubanDataSource)!.text}</span>
-                    <ExternalLink className='w-3.5 opacity-70' />
-                  </button>
-                </div>
-              )}
             </div>
 
             {doubanDataSource === 'custom' && (
@@ -393,18 +373,6 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
                   </div>
                 )}
               </div>
-              {getThanksInfo(doubanImageProxyType) && (
-                <div className='mt-3'>
-                  <button
-                    type='button'
-                    onClick={() => window.open(getThanksInfo(doubanImageProxyType)!.url, '_blank')}
-                    className='flex items-center justify-center gap-1.5 w-full px-3 text-xs text-gray-500 dark:text-gray-400 cursor-pointer'
-                  >
-                    <span className='font-medium'>{getThanksInfo(doubanImageProxyType)!.text}</span>
-                    <ExternalLink className='w-3.5 opacity-70' />
-                  </button>
-                </div>
-              )}
             </div>
 
             {doubanImageProxyType === 'custom' && (
@@ -458,18 +426,6 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
                   </div>
                 )}
               </div>
-              {bangumiApiType === 'cmliussss' && (
-                <div className='mt-3'>
-                  <button
-                    type='button'
-                    onClick={() => window.open('https://github.com/cmliu', '_blank')}
-                    className='flex items-center justify-center gap-1.5 w-full px-3 text-xs text-gray-500 dark:text-gray-400 cursor-pointer'
-                  >
-                    <span className='font-medium'>Thanks to @CMLiussss</span>
-                    <ExternalLink className='w-3.5 opacity-70' />
-                  </button>
-                </div>
-              )}
             </div>
 
             {bangumiApiType === 'custom' && (
@@ -523,18 +479,6 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
                   </div>
                 )}
               </div>
-              {bangumiImageProxyType === 'cmliussss' && (
-                <div className='mt-3'>
-                  <button
-                    type='button'
-                    onClick={() => window.open('https://github.com/cmliu', '_blank')}
-                    className='flex items-center justify-center gap-1.5 w-full px-3 text-xs text-gray-500 dark:text-gray-400 cursor-pointer'
-                  >
-                    <span className='font-medium'>Thanks to @CMLiussss</span>
-                    <ExternalLink className='w-3.5 opacity-70' />
-                  </button>
-                </div>
-              )}
             </div>
 
             {bangumiImageProxyType === 'custom' && (
@@ -588,14 +532,6 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
               <Toggle checked={exactSearch} onChange={handleExactSearchToggle} />
             </div>
 
-            <div className='flex items-center justify-between'>
-              <div>
-                <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>IPTV 视频浏览器直连</h4>
-                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>开启 IPTV 视频浏览器直连时，需要自备 Allow CORS 插件</p>
-              </div>
-              <Toggle checked={liveDirectConnect} onChange={handleLiveDirectConnectToggle} />
-            </div>
-
             <div className='border-t border-gray-200 dark:border-gray-700'></div>
 
             {/* 播放缓冲优化 */}
@@ -617,11 +553,6 @@ export const SettingsPanel = memo(({ isOpen, onClose }: SettingsPanelProps) => {
                       selected: 'border-transparent bg-linear-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 ring-2 ring-blue-400/60 dark:ring-blue-500/50 shadow-[0_0_15px_-3px_rgba(59,130,246,0.4)] dark:shadow-[0_0_15px_-3px_rgba(59,130,246,0.3)]',
                       icon: 'bg-linear-to-br from-blue-100 to-cyan-100 dark:from-blue-800/50 dark:to-cyan-800/50',
                       check: 'text-blue-500', label: 'text-blue-700 dark:text-blue-300',
-                    },
-                    purple: {
-                      selected: 'border-transparent bg-linear-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 ring-2 ring-purple-400/60 dark:ring-purple-500/50 shadow-[0_0_15px_-3px_rgba(168,85,247,0.4)] dark:shadow-[0_0_15px_-3px_rgba(168,85,247,0.3)]',
-                      icon: 'bg-linear-to-br from-purple-100 to-pink-100 dark:from-purple-800/50 dark:to-pink-800/50',
-                      check: 'text-purple-500', label: 'text-purple-700 dark:text-purple-300',
                     },
                   } as const;
                   const colors = colorClasses[option.color as keyof typeof colorClasses];

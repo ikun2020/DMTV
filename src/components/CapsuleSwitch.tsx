@@ -60,21 +60,21 @@ const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
   }, [activeIndex]);
 
   return (
-    <div className="max-w-full overflow-x-auto scrollbar-hide">
+    <div className="max-w-full overflow-x-auto rounded-full scrollbar-hide">
     <div
       ref={containerRef}
-      className={`relative inline-flex bg-linear-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 rounded-full p-1 shadow-lg ${
+      className={`relative isolate inline-flex overflow-hidden rounded-full border border-gray-300/60 bg-linear-to-r from-gray-200 via-gray-300 to-gray-200 p-[3px] shadow-sm dark:border-gray-600/60 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 ${
         className || ''
       }`}
     >
       {/* 滑动的渐变背景指示器 */}
       {indicatorStyle.width > 0 && (
         <div
-          className='absolute top-1 bottom-1 bg-linear-to-r from-blue-500 via-purple-500 to-pink-500 dark:from-blue-600 dark:via-purple-600 dark:to-pink-600 rounded-full shadow-xl transition-all duration-300 ease-out'
+          className='pointer-events-none absolute top-[3px] bottom-[3px] rounded-full bg-linear-to-r from-blue-500 via-purple-500 to-pink-500 shadow-xl transition-all duration-300 ease-out dark:from-blue-600 dark:via-purple-600 dark:to-pink-600'
           style={{
             left: `${indicatorStyle.left}px`,
             width: `${indicatorStyle.width}px`,
-            boxShadow: '0 0 20px rgba(147, 51, 234, 0.5), 0 0 40px rgba(59, 130, 246, 0.3)',
+            boxShadow: '0 0 16px rgba(147, 51, 234, 0.5), 0 0 32px rgba(59, 130, 246, 0.3)',
           }}
         />
       )}
@@ -88,7 +88,7 @@ const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
               buttonRefs.current[index] = el;
             }}
             onClick={() => onChange(opt.value)}
-            className={`relative z-10 w-16 px-3 py-1 text-xs sm:w-20 sm:py-2 sm:text-sm rounded-full font-bold transition-all duration-200 cursor-pointer ${
+            className={`relative z-10 h-8 w-16 shrink-0 whitespace-nowrap rounded-full px-1.5 text-[11px] font-bold transition-all duration-200 cursor-pointer sm:h-[2.2rem] sm:w-[4.8rem] sm:px-2.5 sm:text-[13px] ${
               isActive
                 ? 'text-white dark:text-white drop-shadow-lg'
                 : 'text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'

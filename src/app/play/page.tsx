@@ -438,10 +438,11 @@ function PlayPageClient() {
 
   // 获取 HLS 缓冲配置（根据用户设置的模式）
   const getHlsBufferConfig = () => {
-    const mode =
+    const storedMode =
       typeof window !== 'undefined'
-        ? localStorage.getItem('playerBufferMode') || 'standard'
-        : 'standard';
+        ? localStorage.getItem('playerBufferMode')
+        : null;
+    const mode = storedMode === 'enhanced' ? 'enhanced' : 'standard';
 
     switch (mode) {
       case 'enhanced':
@@ -450,13 +451,6 @@ function PlayPageClient() {
           maxBufferLength: 45, // 45s（默认30s × 1.5）
           backBufferLength: 45,
           maxBufferSize: 90 * 1000 * 1000, // 90MB
-        };
-      case 'max':
-        // 强力模式：3 倍缓冲
-        return {
-          maxBufferLength: 90, // 90s（默认30s × 3）
-          backBufferLength: 60,
-          maxBufferSize: 180 * 1000 * 1000, // 180MB
         };
       case 'standard':
       default:

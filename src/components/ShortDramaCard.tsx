@@ -11,18 +11,14 @@ import { useLongPress } from '@/hooks/useLongPress';
 import { useToggleFavoriteMutation } from '@/hooks/useFavoritesMutations';
 import { useIsFavoritedQuery } from '@/hooks/useFavoritesQuery';
 import { isAIRecommendFeatureDisabled } from '@/lib/ai-recommend.client';
+import { processImageUrl } from '@/lib/utils';
 import {
   saveFavorite,
   deleteFavorite,
   generateStorageKey,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
-import {
-  SHORTDRAMA_CACHE_EXPIRE,
-  getCacheKey,
-  getCache,
-  setCache,
-} from '@/lib/shortdrama-cache';
+
 import { loadedImageUrls } from '@/lib/imageCache';
 import { ShortDramaItem } from '@/lib/types';
 
@@ -48,8 +44,8 @@ function ShortDramaCard({
   const queryClient = useQueryClient();
   const toggleFavoriteMutation = useToggleFavoriteMutation();
 
-  const [realEpisodeCount, setRealEpisodeCount] = useState<number>(drama.episode_count);
-  const [showEpisodeCount, setShowEpisodeCount] = useState(drama.episode_count > 1); // 如果初始集数>1就显示
+  const realEpisodeCount = drama.episode_count;
+  const showEpisodeCount = drama.episode_count > 1;
   const [imageLoaded, setImageLoaded] = useState(() =>
     loadedImageUrls.has(drama.cover)
   ); // 图片加载状态，初始化时检查缓存
@@ -104,85 +100,6 @@ function ShortDramaCard({
     setAiCheckCompleteLocal(true);
   }, [aiEnabledProp]);
 
-  // 获取真实集数（优先使用备用API）
-  useEffect(() => {
-    const fetchEpisodeCount = async () => {
-      const cacheKey = getCacheKey('episodes', { id: drama.id });
-
-      // 检查统一缓存
-      const cached = await getCache(cacheKey);
-      if (cached && typeof cached === 'number') {
-        if (cached > 1) {
-          setRealEpisodeCount(cached);
-          setShowEpisodeCount(true);
-        } else {
-          setShowEpisodeCount(false);
-        }
-        return;
-      }
-
-      try {
-        // 🔥 暂时注释掉备用API调用，避免后台日志报错（未配置备用API）
-        // 优先尝试使用备用API（通过剧名获取集数，更快更可靠）
-        // const episodeCountResponse = await fetch(
-        //   `/api/shortdrama/episode-count?name=${encodeURIComponent(drama.name)}`
-        // );
-        //
-        // if (episodeCountResponse.ok) {
-        //   const episodeCountData = await episodeCountResponse.json();
-        //   if (episodeCountData.episodeCount > 1) {
-        //     setRealEpisodeCount(episodeCountData.episodeCount);
-        //     setShowEpisodeCount(true);
-        //     // 使用统一缓存系统缓存结果
-        //     await setCache(cacheKey, episodeCountData.episodeCount, SHORTDRAMA_CACHE_EXPIRE.episodes);
-        //     return; // 成功获取，直接返回
-        //   }
-        // }
-        //
-        // // 备用API失败，fallback到主API解析方式
-        // console.log('备用API获取集数失败，尝试主API...');
-
-        // 直接使用主API解析方式获取集数
-
-        // 先尝试第1集（episode=0）
-        let response = await fetch(`/api/shortdrama/parse?id=${drama.id}&episode=0&name=${encodeURIComponent(drama.name)}`);
-        let result = null;
-
-        if (response.ok) {
-          result = await response.json();
-        }
-
-        // 如果第1集失败，尝试第2集（episode=1）
-        if (!result || !result.totalEpisodes) {
-          response = await fetch(`/api/shortdrama/parse?id=${drama.id}&episode=1&name=${encodeURIComponent(drama.name)}`);
-          if (response.ok) {
-            result = await response.json();
-          }
-        }
-
-        if (result && result.totalEpisodes > 1) {
-          setRealEpisodeCount(result.totalEpisodes);
-          setShowEpisodeCount(true);
-          // 使用统一缓存系统缓存结果
-          await setCache(cacheKey, result.totalEpisodes, SHORTDRAMA_CACHE_EXPIRE.episodes);
-        } else {
-          // 如果解析失败或集数<=1，不显示集数标签，缓存0避免重复请求
-          setShowEpisodeCount(false);
-          await setCache(cacheKey, 0, SHORTDRAMA_CACHE_EXPIRE.episodes / 24); // 1小时后重试
-        }
-      } catch (error) {
-        console.error('获取集数失败:', error);
-        // 网络错误时不显示集数标签
-        setShowEpisodeCount(false);
-        await setCache(cacheKey, 0, SHORTDRAMA_CACHE_EXPIRE.episodes / 24); // 1小时后重试
-      }
-    };
-
-    // 只有当前集数为1（默认值）时才尝试获取真实集数
-    if (drama.episode_count === 1) {
-      fetchEpisodeCount();
-    }
-  }, [drama.id, drama.episode_count, drama.name]);
 
   // 处理收藏切换 - 使用 TanStack Query mutation
   const handleToggleFavorite = useCallback(
@@ -310,8 +227,9 @@ function ShortDramaCard({
           />
 
           <img
-            src={drama.cover ? `/api/image-proxy?url=${encodeURIComponent(drama.cover)}` : '/placeholder-cover.jpg'}
+            src={processImageUrl(drama.cover || '/placeholder-cover.jpg')}
             alt={drama.name}
+            referrerPolicy='no-referrer'
             className={`h-full w-full object-cover transition-all duration-700 ease-out ${
               imageLoaded ? 'opacity-100 blur-0 scale-100 group-hover:scale-105' : 'opacity-0 blur-md scale-105'
             }`}
@@ -321,7 +239,10 @@ function ShortDramaCard({
               setImageLoaded(true);
             }}
             onError={(e) => {
-              (e.target as HTMLImageElement).src = '/placeholder-cover.jpg';
+              const image = e.currentTarget;
+              if (!image.src.endsWith('/placeholder-cover.jpg')) {
+                image.src = '/placeholder-cover.jpg';
+              }
               setImageLoaded(true);
             }}
           />

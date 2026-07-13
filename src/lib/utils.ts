@@ -142,15 +142,25 @@ function getDoubanImageProxyConfig(): {
   };
 }
 
+function isGuestBrowser(): boolean {
+  if (typeof document === 'undefined') return false;
+  return !document.cookie.split(';').some((cookie) => {
+    const name = cookie.trim().split('=', 1)[0];
+    return name === 'user_auth' || name === 'auth';
+  });
+}
+
 /**
  * 处理图片 URL，如果设置了图片代理则使用代理
  */
 export function processImageUrl(originalUrl: string): string {
   if (!originalUrl) return originalUrl;
 
-  // 处理 manmankan 图片防盗链
+  // 漫漫看禁止浏览器跨站加载；游客使用本地占位图，避免 403 和重试。
   if (originalUrl.includes('manmankan.com')) {
-    return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
+    return isGuestBrowser()
+      ? '/placeholder-cover.jpg'
+      : `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
   }
 
   // Bangumi 图片代理（lain.bgm.tv 在国内无法直接访问）
@@ -182,7 +192,9 @@ export function processImageUrl(originalUrl: string): string {
   const { proxyType, proxyUrl } = getDoubanImageProxyConfig();
   switch (proxyType) {
     case 'server':
-      return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
+      return isGuestBrowser()
+        ? originalUrl.replace(/img\d+\.doubanio\.com/g, 'img.doubanio.cmliussss.net')
+        : `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
     case 'img3':
       return originalUrl.replace(/img\d+\.doubanio\.com/g, 'img3.doubanio.com');
     case 'cmliussss-cdn-tencent':
