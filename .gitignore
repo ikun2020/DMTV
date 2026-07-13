@@ -56,3 +56,6 @@ crash-reports.jsonl
 
 # sqlite data
 data/
+
+# Playwright CLI diagnostic artifacts
+/.playwright-cli/
