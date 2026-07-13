@@ -101,6 +101,16 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     videoInfoMapRef.current = videoInfoMap;
   }, [videoInfoMap]);
 
+  // 集数变化后旧测速结果已失效，下一次测速必须对应当前集。
+  useEffect(() => {
+    const emptyInfo = new Map<string, VideoInfo>();
+    const emptyAttempts = new Set<string>();
+    setVideoInfoMap(emptyInfo);
+    setAttemptedSources(emptyAttempts);
+    videoInfoMapRef.current = emptyInfo;
+    attemptedSourcesRef.current = emptyAttempts;
+  }, [value]);
+
   // 主要的 tab 状态：'episodes' 或 'sources'
   // 当只有一集时默认展示 "换源"，并隐藏 "选集" 标签
   const [activeTab, setActiveTab] = useState<'episodes' | 'sources'>(
@@ -135,8 +145,11 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     if (!source.episodes || source.episodes.length === 0) {
       return;
     }
-    const episodeUrl =
-      source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
+    const episodeIndex = Math.min(
+      Math.max(value - 1, 0),
+      source.episodes.length - 1
+    );
+    const episodeUrl = source.episodes[episodeIndex];
 
     // 标记为已尝试
     setAttemptedSources((prev) => new Set(prev).add(sourceKey));
@@ -159,7 +172,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         })
       );
     }
-  }, []);
+  }, [value]);
 
   // 当有预计算结果时，先合并到videoInfoMap中
   useEffect(() => {
@@ -247,7 +260,11 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
             return;
           }
 
-          const episodeUrl = source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
+          const episodeIndex = Math.min(
+            Math.max(value - 1, 0),
+            source.episodes.length - 1
+          );
+          const episodeUrl = source.episodes[episodeIndex];
 
           try {
             const info = await getVideoResolutionFromM3u8(episodeUrl);
@@ -726,7 +743,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
             !sourceSearchError &&
             availableSources.length > 0 && (
               <div className='flex-1 overflow-y-auto space-y-2 sm:space-y-3 pb-20'>
-                {availableSources
+                {[...availableSources]
                   .sort((a, b) => {
                     const aIsCurrent =
                       a.source?.toString() === currentSource?.toString() &&

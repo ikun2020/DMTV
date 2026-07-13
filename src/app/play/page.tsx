@@ -24,7 +24,6 @@ import PageLayout from '@/components/PageLayout';
 import SkipController, { SkipSettingsButton } from '@/components/SkipController';
 import VideoCard from '@/components/VideoCard';
 import CommentSection from '@/components/play/CommentSection';
-import DownloadButtons from '@/components/play/DownloadButtons';
 import FavoriteButton from '@/components/play/FavoriteButton';
 import NetDiskButton from '@/components/play/NetDiskButton';
 import CollapseButton from '@/components/play/CollapseButton';
@@ -598,6 +597,18 @@ function PlayPageClient() {
   // 换源相关状态
   const [availableSources, setAvailableSources] = useState<SearchResult[]>([]);
   const availableSourcesRef = useRef<SearchResult[]>([]);
+  const backgroundSourcesLoadingRef = useRef(false);
+  const autoSourceFallbackRef = useRef<{
+    episodeKey: string;
+    attemptedSourceKeys: Set<string>;
+    inProgress: boolean;
+    pendingSourceKey: string | null;
+  }>({
+    episodeKey: '',
+    attemptedSourceKeys: new Set<string>(),
+    inProgress: false,
+    pendingSourceKey: null,
+  });
 
   const currentSourceRef = useRef(currentSource);
   const currentIdRef = useRef(currentId);
@@ -1509,12 +1520,14 @@ function PlayPageClient() {
   // 设置可用源列表（先按权重排序）
   const setAvailableSourcesWithWeight = async (sources: SearchResult[]): Promise<SearchResult[]> => {
     if (sources.length <= 1) {
+      availableSourcesRef.current = sources;
       setAvailableSources(sources);
       return sources;
     }
     const weights = await fetchSourceWeights();
     const sortedSources = sortSourcesByWeight(sources, weights);
     console.log('按权重排序可用源:', sortedSources.map(s => `${s.source_name}(${weights[s.source] ?? 50})`).slice(0, 5), '...');
+    availableSourcesRef.current = sortedSources;
     setAvailableSources(sortedSources);
     return sortedSources;
   };
@@ -2929,14 +2942,16 @@ function PlayPageClient() {
           const dramaTitle = searchParams.get('title') || videoTitleRef.current || '';
           const titleParam = dramaTitle ? `&name=${encodeURIComponent(dramaTitle)}` : '';
           detailResponse = await fetch(
-            `/api/shortdrama/detail?id=${id}&episode=1${titleParam}`
+            `/api/shortdrama/detail?id=${id}&episode=1${titleParam}&_playback=${Date.now()}`,
+            { cache: 'no-store' }
           );
         } else {
           // 所有其他源（包括 Emby）统一使用 /api/detail
           // 添加 title 参数用于搜索匹配
           const titleParam = title ? `&title=${encodeURIComponent(title)}` : '';
           detailResponse = await fetch(
-            `/api/detail?source=${source}&id=${id}${titleParam}`
+            `/api/detail?source=${source}&id=${id}${titleParam}&_playback=${Date.now()}`,
+            { cache: 'no-store' }
           );
         }
 
@@ -2979,7 +2994,8 @@ function PlayPageClient() {
           console.log('尝试搜索变体:', variant);
 
           const response = await fetch(
-            `/api/search?q=${encodeURIComponent(variant)}`
+            `/api/search?q=${encodeURIComponent(variant)}&_playback=${Date.now()}`,
+            { cache: 'no-store' }
           );
           if (!response.ok) {
             console.warn(`搜索变体 "${variant}" 失败:`, response.statusText);
@@ -3154,6 +3170,7 @@ function PlayPageClient() {
       } catch (err) {
         console.error('智能搜索失败:', err);
         setSourceSearchError(err instanceof Error ? err.message : '搜索失败');
+        availableSourcesRef.current = [];
         setAvailableSources([]);
         return [];
       } finally {
@@ -3201,6 +3218,7 @@ function PlayPageClient() {
         }
 
         // 异步获取其他源信息，不阻塞播放
+        backgroundSourcesLoadingRef.current = true;
         setBackgroundSourcesLoading(true);
         fetchSourcesData(searchTitle || videoTitle).then((sources) => {
           // 合并当前源和搜索到的其他源
@@ -3211,10 +3229,13 @@ function PlayPageClient() {
               allSources.push(source);
             }
           });
+          availableSourcesRef.current = allSources;
           setAvailableSources(allSources);
+          backgroundSourcesLoadingRef.current = false;
           setBackgroundSourcesLoading(false);
         }).catch((err) => {
           console.error('异步获取其他源失败:', err);
+          backgroundSourcesLoadingRef.current = false;
           setBackgroundSourcesLoading(false);
         });
       } else {
@@ -3462,10 +3483,12 @@ function PlayPageClient() {
         }
       }
 
-      const newDetail = availableSources.find(
+      const newDetail = availableSourcesRef.current.find(
         (source) => source.source === newSource && source.id === newId
       );
       if (!newDetail) {
+        isSourceChangingRef.current = false;
+        setIsVideoLoading(false);
         setError('未找到匹配结果');
         return;
       }
@@ -3608,6 +3631,118 @@ function PlayPageClient() {
       setIsVideoLoading(false);
       setError(err instanceof Error ? err.message : '换源失败');
     }
+  };
+
+  /**
+   * 当前 HLS 实例已确认无法恢复时，按正在播放的集数验证备用源。
+   * 状态只在 React 内切换，不刷新页面；同一集的每个源最多尝试一次。
+   */
+  const handlePlaybackSourceFailure = async (
+    failedSourceKey: string,
+    failedEpisodeIndex: number,
+    failedUrl: string
+  ) => {
+    const episodeKey = [videoTitleRef.current, failedEpisodeIndex].join('|');
+    const fallbackState = autoSourceFallbackRef.current;
+
+    if (fallbackState.episodeKey !== episodeKey) {
+      fallbackState.episodeKey = episodeKey;
+      fallbackState.attemptedSourceKeys = new Set<string>();
+      fallbackState.inProgress = false;
+      fallbackState.pendingSourceKey = null;
+    }
+
+    if (
+      fallbackState.inProgress ||
+      fallbackState.attemptedSourceKeys.has(failedSourceKey)
+    ) {
+      return;
+    }
+
+    fallbackState.inProgress = true;
+    fallbackState.pendingSourceKey = null;
+    fallbackState.attemptedSourceKeys.add(failedSourceKey);
+    setVideoLoadingStage('sourceChanging');
+    setIsVideoLoading(true);
+    setLoadingMessage('当前源不可用，正在检测备用播放源...');
+
+    // 当前详情先返回，其他播放源由后台搜索补齐；最多等待 5 秒。
+    for (let i = 0; i < 20; i++) {
+      const hasAlternative = availableSourcesRef.current.some(
+        (source) => source.source + ':' + source.id !== failedSourceKey
+      );
+      if (hasAlternative || !backgroundSourcesLoadingRef.current) break;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    const candidates = availableSourcesRef.current.filter((source) => {
+      const sourceKey = source.source + ':' + source.id;
+      return (
+        sourceKey !== failedSourceKey &&
+        !fallbackState.attemptedSourceKeys.has(sourceKey) &&
+        Boolean(source.episodes?.[failedEpisodeIndex])
+      );
+    });
+
+    for (const candidate of candidates) {
+      const sourceKey = candidate.source + ':' + candidate.id;
+      const candidateUrl = candidate.episodes[failedEpisodeIndex];
+
+      try {
+        console.log(
+          '[HLS自动换源] 检测 ' +
+            candidate.source_name +
+            ' 第' +
+            (failedEpisodeIndex + 1) +
+            '集',
+          candidateUrl
+        );
+        const testResult = await getVideoResolutionFromM3u8(candidateUrl, {
+          timeoutMs: 8000,
+        });
+
+        if (!testResult.hasError && testResult.status !== 'failed') {
+          console.log(
+            '[HLS自动换源] ' + candidate.source_name + ' 可播放，正在切换',
+            testResult
+          );
+          fallbackState.pendingSourceKey = sourceKey;
+          await handleSourceChange(
+            candidate.source,
+            candidate.id,
+            candidate.title
+          );
+
+          // 新 HLS 实例创建时会清除此标记；这里仅处理异常未重建的情况。
+          setTimeout(() => {
+            const latest = autoSourceFallbackRef.current;
+            if (latest.pendingSourceKey === sourceKey) {
+              latest.inProgress = false;
+              latest.pendingSourceKey = null;
+            }
+          }, 5000);
+          return;
+        }
+
+        fallbackState.attemptedSourceKeys.add(sourceKey);
+      } catch (error) {
+        fallbackState.attemptedSourceKeys.add(sourceKey);
+        console.warn(
+          '[HLS自动换源] ' + candidate.source_name + ' 当前集检测失败',
+          error
+        );
+      }
+    }
+
+    fallbackState.inProgress = false;
+    fallbackState.pendingSourceKey = null;
+    setIsVideoLoading(false);
+    console.error('[HLS自动换源] 没有找到可播放的备用源', {
+      failedSourceKey,
+      failedUrl,
+      episode: failedEpisodeIndex + 1,
+    });
+    toast.error('当前集暂未找到可播放的备用源，请稍后重试或手动换源');
   };
 
   useEffect(() => {
@@ -4427,6 +4562,16 @@ function PlayPageClient() {
             if (video.hls) {
               video.hls.destroy();
             }
+
+            // 捕获此 HLS 实例对应的源和集数，避免旧实例错误切走新源。
+            const hlsSourceKey =
+              currentSourceRef.current + ':' + currentIdRef.current;
+            const hlsEpisodeIndex = currentEpisodeIndexRef.current;
+            const fallbackState = autoSourceFallbackRef.current;
+            if (fallbackState.pendingSourceKey === hlsSourceKey) {
+              fallbackState.inProgress = false;
+              fallbackState.pendingSourceKey = null;
+            }
             
             // 在函数内部重新检测iOS13+设备
             const localIsIOS13 = isIOS13;
@@ -4588,8 +4733,20 @@ function PlayPageClient() {
               if (data.fatal) {
                 switch (data.type) {
                   case Hls.ErrorTypes.NETWORK_ERROR:
-                    console.log('网络错误，尝试恢复...');
-                    hls.startLoad();
+                    // hls.js 已在 fatal 前完成内部重试；清单解析错误无法通过
+                    // startLoad() 恢复，因此切换到当前集已验证可用的备用源。
+                    console.warn('致命 HLS 网络错误，准备自动换源...', {
+                      source: hlsSourceKey,
+                      episode: hlsEpisodeIndex + 1,
+                      details: data.details,
+                    });
+                    if (video.hls !== hls) break;
+                    hls.destroy();
+                    void handlePlaybackSourceFailure(
+                      hlsSourceKey,
+                      hlsEpisodeIndex,
+                      url
+                    );
                     break;
                   case Hls.ErrorTypes.MEDIA_ERROR:
                     console.log('媒体错误，尝试恢复...');
@@ -6152,12 +6309,6 @@ function PlayPageClient() {
               onOpenModal={() => setShowNetdiskModal(true)}
             />
 
-            {/* 下载按钮 - 使用独立组件优化性能 */}
-            <DownloadButtons
-              downloadEnabled={downloadEnabled}
-              onDownloadClick={() => setShowDownloadEpisodeSelector(true)}
-              onDownloadPanelClick={() => setShowDownloadPanel(true)}
-            />
 
             {/* 折叠控制按钮 - 仅在 lg 及以上屏幕显示 */}
             <CollapseButton
