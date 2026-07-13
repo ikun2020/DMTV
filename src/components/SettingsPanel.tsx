@@ -92,7 +92,6 @@ export const SettingsPanel = memo(({ isOpen, onClose, guest = false }: SettingsP
   const [enableAutoSkip, setEnableAutoSkip] = useState(true);
   const [enableAutoNextEpisode, setEnableAutoNextEpisode] = useState(true);
   const [requireClearConfirmation, setRequireClearConfirmation] = useState(false);
-  const [downloadFormat, setDownloadFormat] = useState<'TS' | 'MP4'>('TS');
   const [exactSearch, setExactSearch] = useState(false);
   const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
   const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] = useState(false);
@@ -129,8 +128,6 @@ export const SettingsPanel = memo(({ isOpen, onClose, guest = false }: SettingsP
     setEnableAutoSkip(readLS('enableAutoSkip', true));
     setEnableAutoNextEpisode(readLS('enableAutoNextEpisode', true));
     setRequireClearConfirmation(readLS('requireClearConfirmation', false));
-    const fmt = localStorage.getItem('downloadFormat');
-    if (fmt === 'TS' || fmt === 'MP4') setDownloadFormat(fmt);
     const es = localStorage.getItem('exactSearch');
     if (es !== null) setExactSearch(es === 'true');
     const storedBufferMode = localStorage.getItem('playerBufferMode');
@@ -151,7 +148,6 @@ export const SettingsPanel = memo(({ isOpen, onClose, guest = false }: SettingsP
   const handleOptimizationToggle = set(setEnableOptimization, 'enableOptimization');
   const handleFluidSearchToggle = set(setFluidSearch, 'fluidSearch');
   const handleRequireClearConfirmationToggle = set(setRequireClearConfirmation, 'requireClearConfirmation');
-  const handleDownloadFormatChange = set<'TS' | 'MP4'>(setDownloadFormat, 'downloadFormat', false);
   const handleExactSearchToggle = (v: boolean) => { setExactSearch(v); localStorage.setItem('exactSearch', String(v)); };
   const handleDoubanProxyUrlChange = (v: string) => { setDoubanProxyUrl(v); localStorage.setItem('doubanProxyUrl', v); };
   const handleDoubanDataSourceChange = (v: string) => { setDoubanDataSource(v); localStorage.setItem('doubanDataSource', v); };
@@ -203,7 +199,6 @@ export const SettingsPanel = memo(({ isOpen, onClose, guest = false }: SettingsP
     setEnableAutoSkip(true);
     setEnableAutoNextEpisode(true);
     setPlayerBufferMode('standard');
-    setDownloadFormat('TS');
     setExactSearch(false);
 
     localStorage.setItem('defaultAggregateSearch', JSON.stringify(true));
@@ -224,7 +219,6 @@ export const SettingsPanel = memo(({ isOpen, onClose, guest = false }: SettingsP
     localStorage.setItem('enableAutoNextEpisode', JSON.stringify(true));
     localStorage.setItem('requireClearConfirmation', JSON.stringify(false));
     localStorage.setItem('playerBufferMode', 'standard');
-    localStorage.setItem('downloadFormat', 'TS');
     localStorage.setItem('exactSearch', 'false');
   };
 
@@ -665,56 +659,6 @@ export const SettingsPanel = memo(({ isOpen, onClose, guest = false }: SettingsP
               )}
             </div>
 
-            <div className='border-t border-gray-200 dark:border-gray-700'></div>
-
-            {/* 下载格式 */}
-            <div className='space-y-3'>
-              <div>
-                <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>下载格式</h4>
-                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>选择视频下载时的默认格式</p>
-              </div>
-              <div className='grid grid-cols-2 gap-3'>
-                <button
-                  type='button'
-                  onClick={() => handleDownloadFormatChange('TS')}
-                  className={`p-4 rounded-lg border-2 transition-all duration-200 ${downloadFormat === 'TS' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'}`}
-                >
-                  <div className='flex flex-col items-center gap-2'>
-                    <div className={`text-2xl ${downloadFormat === 'TS' ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>📦</div>
-                    <div className='text-center'>
-                      <div className={`text-sm font-semibold ${downloadFormat === 'TS' ? 'text-green-700 dark:text-green-300' : 'text-gray-900 dark:text-gray-100'}`}>TS格式</div>
-                      <div className='text-xs text-gray-500 dark:text-gray-400 mt-1'>推荐，兼容性好</div>
-                    </div>
-                    {downloadFormat === 'TS' && (
-                      <div className='w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center'>
-                        <svg className='w-3 h-3' fill='currentColor' viewBox='0 0 20 20'><path fillRule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clipRule='evenodd' /></svg>
-                      </div>
-                    )}
-                  </div>
-                </button>
-                <button
-                  type='button'
-                  onClick={() => handleDownloadFormatChange('MP4')}
-                  className={`p-4 rounded-lg border-2 transition-all duration-200 ${downloadFormat === 'MP4' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'}`}
-                >
-                  <div className='flex flex-col items-center gap-2'>
-                    <div className={`text-2xl ${downloadFormat === 'MP4' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>🎬</div>
-                    <div className='text-center'>
-                      <div className={`text-sm font-semibold ${downloadFormat === 'MP4' ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'}`}>MP4格式</div>
-                      <div className='text-xs text-gray-500 dark:text-gray-400 mt-1'>通用格式</div>
-                    </div>
-                    {downloadFormat === 'MP4' && (
-                      <div className='w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center'>
-                        <svg className='w-3 h-3' fill='currentColor' viewBox='0 0 20 20'><path fillRule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clipRule='evenodd' /></svg>
-                      </div>
-                    )}
-                  </div>
-                </button>
-              </div>
-              <div className='text-xs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800'>
-                💡 TS格式下载速度快，兼容性好；MP4格式经过转码，体积略小，兼容性更广
-              </div>
-            </div>
           </div>
 
           {/* 底部说明 */}
