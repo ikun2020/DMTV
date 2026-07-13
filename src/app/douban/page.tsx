@@ -586,7 +586,7 @@ function DoubanPageClient() {
                         <div className='absolute inset-0 rounded-full bg-blue-400/30 animate-ping'></div>
                       </div>
                       <div className='text-center'>
-                        <p className='text-base font-semibold text-gray-800 dark:text-gray-200 mb-1'>已加载全部内容</p>
+                        <p className='text-base font-semibold text-gray-800 dark:text-gray-200 mb-1'>更多内容请详细筛选</p>
                         <p className='text-xs text-gray-600 dark:text-gray-400'>共 {allItems.length} 项</p>
                       </div>
                     </div>
@@ -704,7 +704,7 @@ function DoubanPageClient() {
                       </div>
                       <div className='text-center'>
                         <p className='text-base font-semibold text-gray-800 dark:text-gray-200 mb-1'>
-                          已加载全部内容
+                          更多内容请详细筛选
                         </p>
                         <p className='text-xs text-gray-600 dark:text-gray-400'>
                           共 {allItems.length} 项
