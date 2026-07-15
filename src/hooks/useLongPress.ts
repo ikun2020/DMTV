@@ -31,11 +31,19 @@ export const useLongPress = ({
     }
   }, []);
 
+  const resetGesture = useCallback(() => {
+    clearTimer();
+    isLongPress.current = false;
+    startPosition.current = null;
+    isActive.current = false;
+    wasButton.current = false;
+  }, [clearTimer]);
+
   const handleStart = useCallback(
     (clientX: number, clientY: number, isButton = false) => {
-      // 如果已经有活跃的手势，忽略新的开始
+      // Clear stale state left by a browser-cancelled touch gesture.
       if (isActive.current) {
-        return;
+        resetGesture();
       }
 
       isActive.current = true;
@@ -44,6 +52,8 @@ export const useLongPress = ({
 
       // 记录触摸开始时是否是按钮
       wasButton.current = isButton;
+      // Let real controls and links keep their native click behavior.
+      if (isButton) return;
 
       pressTimer.current = setTimeout(() => {
         // 再次检查是否仍然活跃
@@ -59,7 +69,7 @@ export const useLongPress = ({
         onLongPress();
       }, longPressDelay);
     },
-    [onLongPress, longPressDelay]
+    [onLongPress, longPressDelay, resetGesture],
   );
 
   const handleMove = useCallback(
@@ -68,7 +78,7 @@ export const useLongPress = ({
 
       const distance = Math.sqrt(
         Math.pow(clientX - startPosition.current.x, 2) +
-        Math.pow(clientY - startPosition.current.y, 2)
+          Math.pow(clientY - startPosition.current.y, 2),
       );
 
       // 如果移动距离超过阈值，取消长按
@@ -77,7 +87,7 @@ export const useLongPress = ({
         isActive.current = false;
       }
     },
-    [clearTimer, moveThreshold]
+    [clearTimer, moveThreshold],
   );
 
   const handleEnd = useCallback(() => {
@@ -87,35 +97,31 @@ export const useLongPress = ({
     // 1. 如果是长按，不触发点击
     // 2. 如果不是长按且触摸开始时是按钮，不触发点击
     // 3. 否则触发点击
-    const shouldClick = !isLongPress.current && !wasButton.current && onClick && isActive.current;
+    const shouldClick =
+      !isLongPress.current && !wasButton.current && onClick && isActive.current;
 
     if (shouldClick) {
       onClick();
     }
 
     // 重置所有状态
-    isLongPress.current = false;
-    startPosition.current = null;
-    isActive.current = false;
-    wasButton.current = false;
-  }, [clearTimer, onClick]);
+    resetGesture();
+  }, [clearTimer, onClick, resetGesture]);
 
   // 触摸事件处理器
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
       // 检查是否触摸的是按钮或其他交互元素
       const target = e.target as HTMLElement;
-      const buttonElement = target.closest('[data-button]');
-
-      // 更精确的按钮检测：只有当触摸目标直接是按钮元素或其直接子元素时才认为是按钮
-      const isDirectButton = target.hasAttribute('data-button');
-      const isButton = !!buttonElement && isDirectButton;
+      const interactiveElement = target.closest(
+        'button, a, input, select, textarea, [role="button"], [data-button]',
+      );
 
       // 阻止默认的长按行为，但不阻止触摸开始事件
       const touch = e.touches[0];
-      handleStart(touch.clientX, touch.clientY, !!isButton);
+      handleStart(touch.clientX, touch.clientY, !!interactiveElement);
     },
-    [handleStart]
+    [handleStart],
   );
 
   const onTouchMove = useCallback(
@@ -123,24 +129,30 @@ export const useLongPress = ({
       const touch = e.touches[0];
       handleMove(touch.clientX, touch.clientY);
     },
-    [handleMove]
+    [handleMove],
   );
 
   const onTouchEnd = useCallback(
     (e: React.TouchEvent) => {
-      // 始终阻止默认行为，避免任何系统长按菜单
-      e.preventDefault();
-      e.stopPropagation();
+      // Only take over active card gestures. Native controls and cancelled
+      // scroll gestures must retain their browser behavior.
+      if (isActive.current && !wasButton.current) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       handleEnd();
     },
-    [handleEnd]
+    [handleEnd],
   );
 
-
+  const onTouchCancel = useCallback(() => {
+    resetGesture();
+  }, [resetGesture]);
 
   return {
     onTouchStart,
     onTouchMove,
     onTouchEnd,
+    onTouchCancel,
   };
 };

@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 import { canAccessAsGuest } from '../guest-access';
 
 describe('guest access policy', () => {
@@ -17,6 +21,7 @@ describe('guest access policy', () => {
     '/play?source=demo&id=1',
     '/api/search',
     '/api/detail',
+    '/api/netdisk/search',
     '/api/video-proxy',
   ])('allows explicit public route %s', (pathname) => {
     expect(canAccessAsGuest(pathname.split('?')[0])).toBe(true);

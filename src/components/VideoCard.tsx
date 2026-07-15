@@ -877,6 +877,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
         onClick={handleClick}
         onMouseEnter={handlePrefetch}
         onFocus={handlePrefetch}
+        onPointerDown={handlePrefetch}
         {...longPressProps}
         style={{
           // 禁用所有默认的长按和选择效果
@@ -1005,8 +1006,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
           {/* 播放按钮 / 即将上映提示 / 加载状态 */}
           {config.showPlayButton && (
             <div
-              data-button="true"
-              className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ease-in-out ${
+              className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-all duration-300 ease-in-out ${
                 isNavigating ? 'opacity-100 scale-100' : 'opacity-0 delay-75 group-hover:opacity-100 group-hover:scale-100'
               }`}
               style={{

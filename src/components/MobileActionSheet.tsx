@@ -1,9 +1,7 @@
-import { ChevronDown, Radio, X } from 'lucide-react';
+import { Radio, X } from 'lucide-react';
 import Image from 'next/image';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { fetchDoubanQuickInfo, fetchDoubanSuggest } from '@/lib/douban.client';
-import { fetchBangumiSubject } from '@/lib/bangumi.client';
 
 interface ActionItem {
   id: string;
@@ -44,16 +42,9 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
   currentEpisode,
   totalEpisodes,
   origin = 'vod',
-  doubanId,
-  videoTitle,
-  videoYear,
-  isBangumi = false,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [doubanDetails, setDoubanDetails] = useState<any>(null);
-  const [showScrollHint, setShowScrollHint] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
 
   // 创建独立的 Portal 容器
@@ -176,49 +167,6 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
     }
   }, [isVisible, onClose]);
 
-  // 打开时加载豆瓣详情
-  useEffect(() => {
-    if (!isOpen) {
-      setDoubanDetails(null);
-      setShowScrollHint(false);
-      return;
-    }
-    setDoubanDetails(null);
-    setShowScrollHint(false);
-
-    const load = async () => {
-      // bangumi 直接打 bangumi API
-      if (isBangumi && doubanId && doubanId > 0) {
-        const result = await fetchBangumiSubject(doubanId);
-        if (result) {
-          setDoubanDetails(result);
-          setShowScrollHint(true);
-        }
-        return;
-      }
-
-      let id = doubanId && doubanId > 0 ? String(doubanId) : null;
-
-      if (!id && videoTitle) {
-        try {
-          const results = await fetchDoubanSuggest(videoTitle.trim());
-          if (results?.[0]?.id) id = results[0].id;
-        } catch {}
-      }
-
-      if (!id) return;
-
-      try {
-        const data = await fetchDoubanQuickInfo(id);
-        if (data?.code === 200 && data?.data) {
-          setDoubanDetails(data.data);
-          setShowScrollHint(true);
-        }
-      } catch {}
-    };
-
-    load();
-  }, [isOpen, doubanId, videoTitle]);
 
   if (!isVisible || !portalEl) return null;
 
@@ -392,55 +340,6 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
           </div>
         )}
 
-        {/* 豆瓣详情区域 */}
-        {doubanDetails && (
-          <div
-            ref={scrollRef}
-            className="border-t border-gray-100 dark:border-gray-800 overflow-y-auto"
-            style={{ maxHeight: '280px', touchAction: 'pan-y' }}
-            onTouchMove={(e) => e.stopPropagation()}
-            onScroll={() => setShowScrollHint(false)}
-          >
-            <div className="px-4 pt-4 pb-5 space-y-3">
-              <p className="text-base font-semibold text-gray-900 dark:text-white">{isBangumi ? 'Bangumi 简介' : '豆瓣简介'}</p>
-              <div className="flex flex-wrap items-center gap-2">
-                {doubanDetails.rate && parseFloat(doubanDetails.rate) > 0 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-yellow-400/10 text-yellow-500 text-sm font-semibold">
-                    ★ {doubanDetails.rate}
-                  </span>
-                )}
-                {doubanDetails.year && (
-                  <span className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400">
-                    {doubanDetails.year}
-                  </span>
-                )}
-                {doubanDetails.genres?.slice(0, 4).map((g: string, i: number) => (
-                  <span key={i} className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300">{g}</span>
-                ))}
-              </div>
-              {doubanDetails.directors?.length > 0 && (
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-medium text-gray-800 dark:text-gray-200">导演　</span>
-                  {doubanDetails.directors.slice(0, 3).join(' / ')}
-                </div>
-              )}
-              {doubanDetails.cast?.length > 0 && (
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-medium text-gray-800 dark:text-gray-200">主演　</span>
-                  {doubanDetails.cast.slice(0, 4).join(' / ')}
-                </div>
-              )}
-              {doubanDetails.plot_summary && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{doubanDetails.plot_summary}</p>
-              )}
-            </div>
-          </div>
-        )}
-        {showScrollHint && doubanDetails && (
-          <div className="flex justify-center py-1 pointer-events-none">
-            <ChevronDown size={18} className="text-gray-300 dark:text-gray-600 animate-bounce" />
-          </div>
-        )}
       </div>
     </div>
   );

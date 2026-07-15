@@ -21,6 +21,7 @@ const PUBLIC_GUEST_PATH_PREFIXES = [
   '/api/douban',
   '/api/image-proxy',
   '/api/live',
+  '/api/netdisk/search',
   '/api/parse',
   '/api/proxy',
   '/api/proxy-status',
