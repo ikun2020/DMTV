@@ -11,6 +11,27 @@ import stcasc, { ChineseType } from 'switch-chinese';
 // 创建模块级别的繁简转换器实例
 const converter = stcasc();
 
+// Some providers expose both an HTML share page and a real media URL group.
+// Equal episode counts must still prefer the group containing playable media links.
+const MEDIA_URL_PATTERN = /\.(m3u8|mp4|flv|ts)(\?|#|$)/i;
+
+function isMediaUrlGroup(urls: string[]): boolean {
+  return urls.some((url) => MEDIA_URL_PATTERN.test(url));
+}
+
+function isBetterEpisodeGroup(
+  candidateUrls: string[],
+  currentUrls: string[]
+): boolean {
+  const candidateIsMedia = isMediaUrlGroup(candidateUrls);
+  const currentIsMedia = isMediaUrlGroup(currentUrls);
+
+  if (candidateIsMedia !== currentIsMedia) {
+    return candidateIsMedia;
+  }
+  return candidateUrls.length > currentUrls.length;
+}
+
 interface ApiSearchItem {
   vod_id: string;
   vod_name: string;
@@ -106,7 +127,7 @@ async function searchWithCache(
               matchEpisodes.push(episode_title_url[0]);
             }
           });
-          if (matchEpisodes.length > episodes.length) {
+          if (isBetterEpisodeGroup(matchEpisodes, episodes)) {
             episodes = matchEpisodes;
             titles = matchTitles;
           }
@@ -538,7 +559,7 @@ export async function getDetailFromApi(
           matchEpisodes.push(episode_title_url[1]);
         }
       });
-      if (matchEpisodes.length > episodes.length) {
+      if (isBetterEpisodeGroup(matchEpisodes, episodes)) {
         episodes = matchEpisodes;
         titles = matchTitles;
       }

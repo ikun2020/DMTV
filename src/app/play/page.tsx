@@ -57,7 +57,7 @@ import {
 } from '@/lib/db.client';
 import { getDoubanDetails, getDoubanComments, getDoubanActorMovies } from '@/lib/douban.client';
 import { SearchResult } from '@/lib/types';
-import { getVideoResolutionFromM3u8, processImageUrl, VideoSourceTestResult } from '@/lib/utils';
+import { applyVideoPlayProxy, getVideoResolutionFromM3u8, processImageUrl, stripVideoPlayProxy, VideoSourceTestResult } from '@/lib/utils';
 import { useWatchRoomContextSafe } from '@/components/WatchRoomProvider';
 import { useWatchRoomSync } from './hooks/useWatchRoomSync';
 import {
@@ -2227,7 +2227,7 @@ function PlayPageClient() {
 
         if (response.ok) {
           const result = await response.json();
-          const newUrl = result.url || '';
+          const newUrl = applyVideoPlayProxy(result.url || '');
           if (newUrl !== videoUrl) {
             setVideoUrl(newUrl);
           }
@@ -2255,6 +2255,9 @@ function PlayPageClient() {
       if (isEmbySource && newUrl && currentAudioTrackRef.current >= 0) {
         newUrl = appendAudioStreamIndex(newUrl, currentAudioTrackRef.current);
         console.log('🎵 换集时应用音轨参数:', currentAudioTrackRef.current);
+      }
+      if (!isEmbySource) {
+        newUrl = applyVideoPlayProxy(newUrl);
       }
 
       if (newUrl !== videoUrl) {
@@ -4376,6 +4379,7 @@ function PlayPageClient() {
 
           // 🔥 修复：标记切换中，阻止 video:ratechange 将浏览器重置的 1.0 保存到 localStorage
           isSourceSwitchingRef.current = true;
+        artPlayerRef.current._proxyFallbackDone = false;
 
         let switchPromise: Promise<any>;
         if (isEpisodeChange) {
@@ -4562,6 +4566,7 @@ function PlayPageClient() {
             if (video.hls) {
               video.hls.destroy();
             }
+            (video as any)._proxyFallbackDone = false;
 
             // 捕获此 HLS 实例对应的源和集数，避免旧实例错误切走新源。
             const hlsSourceKey =
@@ -4732,7 +4737,14 @@ function PlayPageClient() {
 
               if (data.fatal) {
                 switch (data.type) {
-                  case Hls.ErrorTypes.NETWORK_ERROR:
+                  case Hls.ErrorTypes.NETWORK_ERROR: {
+                    const rawUrl = !(video as any)._proxyFallbackDone ? stripVideoPlayProxy(url) : null;
+                    if (rawUrl) {
+                      console.warn('Worker proxy failed; falling back to the direct video URL.');
+                      (video as any)._proxyFallbackDone = true;
+                      hls.loadSource(rawUrl);
+                      break;
+                    }
                     // hls.js 已在 fatal 前完成内部重试；清单解析错误无法通过
                     // startLoad() 恢复，因此切换到当前集已验证可用的备用源。
                     console.warn('致命 HLS 网络错误，准备自动换源...', {
@@ -4748,6 +4760,7 @@ function PlayPageClient() {
                       url
                     );
                     break;
+                  }
                   case Hls.ErrorTypes.MEDIA_ERROR:
                     console.log('媒体错误，尝试恢复...');
                     hls.recoverMediaError();
@@ -6048,6 +6061,14 @@ function PlayPageClient() {
         console.error('播放器错误:', err);
         if (artPlayerRef.current.currentTime > 0) {
           return;
+        }
+        if (!artPlayerRef.current._proxyFallbackDone) {
+          const rawUrl = stripVideoPlayProxy(videoUrl);
+          if (rawUrl && !/\.m3u8(\?|#|$)/i.test(videoUrl)) {
+            console.warn('Worker proxy failed; falling back to the direct video URL.');
+            artPlayerRef.current._proxyFallbackDone = true;
+            artPlayerRef.current.switchUrl(rawUrl);
+          }
         }
       });
 

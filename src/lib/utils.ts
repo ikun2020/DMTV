@@ -220,6 +220,46 @@ export function processImageUrl(originalUrl: string): string {
 // ============ 新增：增强的视频源测试类型（向后兼容） ============
 export type VideoSourceTestStatus = 'ok' | 'partial' | 'failed';
 
+// Playback stream proxy configuration shared with the admin VideoProxyConfig.
+function getVideoPlayProxyConfig(): { enabled: boolean; proxyUrl: string } {
+  if (typeof window === 'undefined') return { enabled: false, proxyUrl: '' };
+  const rc = (window as any).RUNTIME_CONFIG;
+  return {
+    enabled: !!rc?.VIDEO_PROXY_ENABLED,
+    proxyUrl: (rc?.VIDEO_PROXY_URL || '').replace(/\/$/, ''),
+  };
+}
+
+// Proxy m3u8 through /m3u8 so segment URLs are rewritten; other media uses /?url=.
+export function applyVideoPlayProxy(url: string): string {
+  if (!url || !/^https?:\/\//i.test(url)) return url;
+
+  const { enabled, proxyUrl } = getVideoPlayProxyConfig();
+  if (!enabled || !proxyUrl) return url;
+
+  // Avoid wrapping an already proxied URL.
+  if (url.startsWith(proxyUrl)) return url;
+
+  const isM3u8 = /\.m3u8(\?|#|$)/i.test(url);
+  const endpoint = isM3u8 ? '/m3u8' : '/';
+  return `${proxyUrl}${endpoint}?url=${encodeURIComponent(url)}`;
+}
+
+// Restore the original URL when the Worker fails so playback can fall back to direct access.
+export function stripVideoPlayProxy(url: string): string | null {
+  if (!url) return null;
+  const { proxyUrl } = getVideoPlayProxyConfig();
+  if (!proxyUrl || !url.startsWith(proxyUrl)) return null;
+
+  try {
+    const parsed = new URL(url);
+    const raw = parsed.searchParams.get('url');
+    return raw ? decodeURIComponent(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface VideoSourceTestResult {
   quality: string;
   loadSpeed: string;
