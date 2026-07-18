@@ -2289,7 +2289,13 @@ function PlayPageClient() {
   // 检测移动设备（在组件层级定义）- 参考ArtPlayer compatibility.js
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
   const isIOSGlobal = /iPad|iPhone|iPod/i.test(userAgent) && !(window as any).MSStream;
-  const isIOS13Global = isIOSGlobal || (userAgent.includes('Macintosh') && typeof navigator !== 'undefined' && navigator.maxTouchPoints >= 1);
+  const isIPadGlobal = /iPad/i.test(userAgent) || (userAgent.includes('Macintosh') && typeof navigator !== 'undefined' && navigator.maxTouchPoints >= 1);
+  const isIOS13Global = isIOSGlobal || isIPadGlobal;
+  const isStandalonePWA = typeof window !== 'undefined' && (
+    (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches) ||
+    (typeof navigator !== 'undefined' && (navigator as any).standalone === true)
+  );
+  const isIPadStandalonePWA = isIPadGlobal && isStandalonePWA;
   const isMobileGlobal = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || isIOS13Global;
 
   // 内存压力检测和清理（针对移动设备）
@@ -4525,7 +4531,7 @@ function PlayPageClient() {
         volume: 0.7,
         isLive: false,
         // iOS设备需要静音才能自动播放，参考ArtPlayer源码处理
-        muted: isIOS || isSafari,
+        muted: isIOS || isSafari || isIPadStandalonePWA,
         autoplay: true,
         pip: true,
         autoSize: false,
@@ -4551,9 +4557,15 @@ function PlayPageClient() {
         lock: true,
         // AirPlay 仅在支持 WebKit API 的浏览器中启用
         // 主要是 Safari (桌面和移动端) 和 iOS 上的其他浏览器
-        airplay: isIOS || isSafari,
+        airplay: isIOS || isSafari || isIPadStandalonePWA,
         moreVideoAttr: {
           crossOrigin: 'anonymous',
+          ...(isIPadStandalonePWA
+            ? {
+                playsInline: true,
+                'webkit-playsinline': true,
+              }
+            : {}),
         },
         // HLS 支持配置
         customType: {
@@ -5191,6 +5203,12 @@ function PlayPageClient() {
           }),
         ],
       });
+      if (isIPadStandalonePWA) {
+        const video = artPlayerRef.current.video as HTMLVideoElement;
+        video.playsInline = true;
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+      }
 
       // 设置 Portal 容器为 ArtPlayer 的 $player 元素（全屏时只有该元素可见）
       setPortalContainer(artPlayerRef.current.template.$player);
