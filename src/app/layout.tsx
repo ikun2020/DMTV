@@ -2,7 +2,7 @@
 
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { Suspense } from 'react';
 import { Toaster } from 'sonner';
 
@@ -61,6 +61,11 @@ export default async function RootLayout({
 }) {
   // 🔥 调用 cookies() 强制动态渲染，防止 Docker 环境下的缓存问题
   await cookies();
+  const requestHeaders = await headers();
+  const userAgent = requestHeaders.get('user-agent') || '';
+  const isIPadRequest =
+    /iPad/i.test(userAgent) ||
+    (/Macintosh/i.test(userAgent) && /Mobile/i.test(userAgent));
 
   const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
 
@@ -151,6 +156,20 @@ export default async function RootLayout({
         />
         <meta name='color-scheme' content='light dark' />
         <meta name='google' content='notranslate' />
+        {isIPadRequest && (
+          <>
+            <meta name='apple-mobile-web-app-capable' content='yes' />
+            <meta
+              name='apple-mobile-web-app-status-bar-style'
+              content='black-translucent'
+            />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `try{var standalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;if(standalone){document.documentElement.classList.add('ipad-pwa')}}catch(e){}`,
+              }}
+            />
+          </>
+        )}
         <link rel='apple-touch-icon' href='/icons/icon-192x192.png' />
         {/* 将配置序列化后直接写入脚本，浏览器端可通过 window.RUNTIME_CONFIG 获取 */}
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
