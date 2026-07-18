@@ -160,13 +160,13 @@ export function useDanmu(options: UseDanmuOptions): UseDanmuReturn {
     manualOverride,
   } = options;
 
-  // 弹幕开关状态（从 localStorage 继承，默认关闭）
+  // 弹幕开关状态（从 localStorage 继承，首次使用默认开启）
   const [externalDanmuEnabled, setExternalDanmuEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const v = localStorage.getItem('enable_external_danmu');
-      return v === 'true';
+      return v === null ? true : v === 'true';
     }
-    return false;
+    return true;
   });
 
   // 弹幕列表state（用于React追踪弹幕数量变化）

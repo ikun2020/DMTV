@@ -3934,7 +3934,12 @@ function PlayPageClient() {
     // f 键 = 切换全屏
     if (e.key === 'f' || e.key === 'F') {
       if (artPlayerRef.current) {
-        artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
+        if (isIPadStandalonePWA) {
+          artPlayerRef.current.fullscreenWeb =
+            !artPlayerRef.current.fullscreenWeb;
+        } else {
+          artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
+        }
         e.preventDefault();
       }
     }
@@ -4542,7 +4547,8 @@ function PlayPageClient() {
         flip: false,
         playbackRate: true,
         aspectRatio: false,
-        fullscreen: true,
+        // iPad standalone PWA must use web fullscreen to preserve ArtPlayer layers.
+        fullscreen: !isIPadStandalonePWA,
         fullscreenWeb: true,
         subtitleOffset: false,
         miniProgressBar: false,
@@ -5078,7 +5084,10 @@ function PlayPageClient() {
                     const currentVisibleCount = document.querySelectorAll('.art-danmuku [data-state="emit"]').length;
 
                     // 🎯 全屏时降低弹幕密度，避免控制栏卡顿
-                    const isFullscreen = artPlayerRef.current?.fullscreen;
+                    const isFullscreen = Boolean(
+                      artPlayerRef.current?.fullscreen ||
+                      artPlayerRef.current?.fullscreenWeb,
+                    );
                     const maxConcurrentDanmu = isFullscreen
                       ? (devicePerformance === 'high' ? 40 : devicePerformance === 'medium' ? 25 : 15)
                       : (devicePerformance === 'high' ? 60 : devicePerformance === 'medium' ? 40 : 25);
