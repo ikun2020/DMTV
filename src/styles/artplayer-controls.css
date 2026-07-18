@@ -25,27 +25,6 @@
   padding-bottom: 60px !important;
 }
 
-/* iPad 主屏幕 PWA：网页全屏延伸到状态栏下方，并保持安全区为黑色 */
-html.ipad-pwa {
-  background-color: #000 !important;
-}
-
-html.ipad-pwa .art-video-player.art-fullscreen-web {
-  position: fixed !important;
-  inset: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  max-width: none !important;
-  max-height: none !important;
-  border-radius: 0 !important;
-  background-color: #000 !important;
-}
-
-html.ipad-pwa .art-video-player.art-fullscreen-web .art-video {
-  width: 100% !important;
-  height: 100% !important;
-}
-
 /* ===== Volume Control Hover Fix ===== */
 /* 修复音量面板 hover 时消失的问题 - 让面板始终接收鼠标事件 */
 @media (hover: hover) {
